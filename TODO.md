@@ -96,3 +96,84 @@ Tareas pendientes tras la primera presentación con el cliente.
 ## Notas
 
 Test note content
+
+---
+
+# PLAN DE TRABAJO — Producción en Raspberry Pi (pendiente)
+
+> Bloque añadido para retomar en una sesión nueva de Kiro (por si crashea).
+> Contexto: app FastAPI + SQLite ("Santé") desplegada EN PRODUCCIÓN en una Raspberry Pi
+> con datos reales de pacientes. EXTREMA PRUDENCIA: nada destructivo, backup antes de tocar prod.
+
+## Entorno de producción (datos reales verificados)
+
+- Usuario del sistema: `silver`  (home: `/home/silver`)
+- Proyecto: `/home/silver/sante`
+- Virtualenv: `/home/silver/venv`  (FUERA del proyecto)
+- Servicio systemd: `sante.service` (`User=silver`), depende de `media-usb.mount`
+- SO: Raspberry Pi OS Lite, base Debian 13 (trixie), SOLO consola (sin escritorio)
+- IP actual: `192.168.0.100`, puerto app `8000`
+- Base de datos: `/home/silver/sante/sante.db`
+- El backup por app (Configuración) exporta SOLO el `.db`; los PDFs en disco NO se incluyen.
+- Desarrollo en Windows (`C:\PoC\sante`). OJO: hay rutas y dependencias Windows-only en el código.
+- Mac del usuario: se quiere integrar con una carpeta compartida (ver tarea 5).
+- Repositorio git: https://github.com/silvestreber/sante.git (rama `main`). Commit inicial subido.
+  `.gitignore` excluye datos sensibles: `.db`, `.env`, `*.xlsx`, backups, uploads, PDFs de facturas, logs.
+
+## Tareas pendientes (en orden, con cuidado en producción)
+
+- [~] **1. Despliegue fácil (script de actualización)** — EN PROGRESO
+  Hecho: proyecto subido a repo git privado en GitHub (commit inicial, rama `main`), con `.gitignore`
+  que protege datos sensibles.
+  Pendiente: conectar `/home/silver/sante` de la Raspberry con el repo; crear script `deploy.sh` que
+  haga backup del `.db` → `git pull` → instalar dependencias si cambió `requirements.txt` → aplicar
+  migraciones si hacen falta → reiniciar `sante` → verificar healthcheck. Decidir sistema de
+  migraciones: actualmente NO hay (la BD se crea con `Base.metadata.create_all` en
+  `app/db/init_db.py`, que crea tablas nuevas pero NO altera columnas existentes). Proponer Alembic o
+  estrategia incremental segura que NO borre datos. Backup del `.db` antes de migrar SIEMPRE.
+  NOTA: la guía menciona `python seed.py` pero no se encuentra ese fichero en dev; verificar en la Pi.
+
+- [ ] **2. Rutas de almacenamiento configurables desde la app**
+  Inventario COMPLETO de todas las rutas donde la app escribe ficheros, indicando cuáles van a la
+  microSD y cuáles al USB externo. Permitir configurarlas desde la vista de Configuración (no desde
+  código ni `.env`) para poder cambiar de USB cuando se llene. Puntos conocidos:
+  - Documentos firmados: `SIGNED_DOCS_PATH` (env, default `"C:/PoC/documentos_firmados"` — ruta Windows!)
+  - Facturas PDF: se generan en `tempfile` temporal; hay copias en `app/static/invoices/`
+  - Backups: carpeta `backups/` (symlink a USB montado en `media-usb.mount` según guía)
+  - Uploads de pacientes: variable `UPLOADS_PATH`/`PATIENT_DOCS_PATH` en `.env`
+  NOTA: el TODO dice que ya hay rutas parametrizables por `.env`, pero NO desde la vista de
+  Configuración; eso es lo que falta. Los puntos de montaje deben ser FIJOS y persistir tras reiniciar
+  (fstab o unit `.mount` de systemd). Indicar explícitamente qué ficheros acaban en SD vs USB.
+
+- [ ] **3. Política de la app respecto al USB externo**
+  Documentar y, si hace falta, mejorar el comportamiento cuando:
+  - el USB NO está enchufado al arrancar (hoy `sante.service` depende de `media-usb.mount`, así que
+    la app NO arranca sin USB — confirmar y decidir si es lo deseado).
+  - el USB se desenchufa con la app funcionando (escrituras, errores, integridad de datos).
+  Incluir cómo consultar la capacidad máxima del USB actual para comprar otro igual o mayor.
+
+- [ ] **4. BUG: error al generar documentos en la Raspberry**
+  CAUSA PROBABLE ya detectada en `app/consent_generator.py -> convert_docx_to_pdf()`: usa
+  `import pythoncom` + `docx2pdf`, que dependen de Microsoft Word vía COM y SOLO funcionan en Windows.
+  En Linux (Raspberry) fallan. Además `SIGNED_DOCS_PATH` por defecto es `"C:/PoC/documentos_firmados"`
+  (ruta Windows inexistente en la Pi). Sustituir la conversión docx->PDF por algo compatible con Linux
+  (p.ej. LibreOffice headless `soffice --convert-to pdf`) y corregir la ruta de salida por una
+  configurable (ver tarea 2). Las facturas/tratamientos usan FPDF (`app/pdf.py`), multiplataforma, así
+  que probablemente esas SÍ funcionen — verificar igualmente.
+
+- [ ] **5. Carpeta compartida Mac ↔ USB de la Raspberry**
+  Estudiar la viabilidad de una carpeta compartida en el Mac enlazada directamente con la unidad
+  externa (USB) de la Raspberry, de forma bidireccional: soltar documentos en la carpeta del Mac y que
+  aparezcan en la Raspberry, y traer documentos de la Raspberry al Mac. Objetivo: manipular los
+  documentos de forma masiva y cómoda, sin tener que hacerlo uno a uno por la app (cada documento está
+  asociado a un usuario/paciente). Opciones a evaluar: Samba (SMB, nativo en macOS Finder "Conectar a
+  servidor" `smb://192.168.0.100`), o `rsync`/`scp` para sincronización puntual. Considerar seguridad
+  (son datos de salud): acceso solo en red local, credenciales, permisos de usuario `silver`, y que
+  NO se rompa el enlace `media-usb.mount` ni los permisos que la app necesita para escribir.
+
+## Reglas de trabajo
+
+- No ejecutar nada destructivo. Backup del `.db` y de los PDFs antes de tocar producción.
+- El usuario ejecuta los comandos en la Raspberry (SSH/teclado) y pega la salida; Kiro guía.
+- Confirmar cada paso en producción antes de aplicarlo.
+- Empezar leyendo el código relevante antes de proponer cambios.
