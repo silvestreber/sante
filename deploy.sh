@@ -126,13 +126,21 @@ ok "Migraciones al día."
 step "6/7 Reiniciar el servicio ${SERVICE_NAME}"
 sudo systemctl restart "${SERVICE_NAME}"
 
-# --- 7. Healthcheck ---
+# --- 7. Healthcheck (con reintentos: la Raspberry puede tardar en arrancar) ---
 step "7/7 Healthcheck"
-sleep 3
-HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}" || echo '000')"
+HTTP_CODE="000"
+MAX_ATTEMPTS=20   # 20 intentos x 2s = hasta 40s de margen
+for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
+  HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}" || echo '000')"
+  if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "302" ]; then
+    ok "App lista tras ${attempt} intento(s) (HTTP ${HTTP_CODE})."
+    break
+  fi
+  info "Esperando a que la app arranque... (intento ${attempt}/${MAX_ATTEMPTS}, HTTP ${HTTP_CODE})"
+  sleep 2
+done
 if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "302" ]; then
-  err "La app no respondió correctamente (HTTP ${HTTP_CODE})."
-  # Forzamos el manejador de error con contexto de healthcheck
+  err "La app no respondió tras ${MAX_ATTEMPTS} intentos (HTTP ${HTTP_CODE})."
   CURRENT_STEP="7/7 Healthcheck (HTTP ${HTTP_CODE})"
   false
 fi
