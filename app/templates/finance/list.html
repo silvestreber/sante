@@ -1,0 +1,288 @@
+﻿{% extends "base.html" %}
+{% block title %}Santé - Contabilidad{% endblock %}
+
+{% block content %}
+<!-- Modal de contraseña -->
+<div id="password-gate" class="fixed inset-0 z-[200] flex items-center justify-center bg-sante-bg">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Acceso protegido</h2>
+        <p class="text-sm text-gray-600 mb-4">Introduce tu contraseña para acceder a la contabilidad.</p>
+        <input type="password" id="gate-password" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm mb-4" placeholder="Contraseña" autofocus>
+        <p id="gate-error" class="hidden text-sm text-red-600 mb-3">Contraseña incorrecta</p>
+        <div class="flex gap-2">
+            <button onclick="verifyPassword()" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Acceder</button>
+            <a href="/calendar" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300 text-center">Cancelar</a>
+        </div>
+    </div>
+</div>
+
+<div id="finance-content" class="hidden">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Contabilidad</h1>
+
+    <!-- Filtros de periodo -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 mb-6">
+        <div class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs text-gray-600 mb-1">Periodo</label>
+                <select id="period-select" onchange="onPeriodChange()" class="border rounded px-3 py-1.5 text-sm">
+                    <option value="month">Mensual</option>
+                    <option value="quarter">Trimestral</option>
+                    <option value="year">Anual</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+            </div>
+            <div id="custom-dates" class="hidden flex gap-2">
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">Desde</label>
+                    <input type="date" id="date-start" class="border rounded px-3 py-1.5 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">Hasta</label>
+                    <input type="date" id="date-end" class="border rounded px-3 py-1.5 text-sm">
+                </div>
+            </div>
+            <button onclick="loadData()" class="bg-sante-primary text-white px-4 py-1.5 rounded text-sm hover:bg-sante-primary/90">Consultar</button>
+            <button onclick="openModal()" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700 ml-auto">+ Nueva entrada</button>
+        </div>
+    </div>
+
+    <!-- Balance -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase">Ingresos</p>
+            <p id="total-income" class="text-2xl font-bold text-green-600">0,00 €</p>
+        </div>
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase">Gastos</p>
+            <p id="total-expense" class="text-2xl font-bold text-red-600">0,00 €</p>
+        </div>
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase">Balance</p>
+            <p id="total-balance" class="text-2xl font-bold text-gray-800">0,00 €</p>
+        </div>
+    </div>
+
+    <!-- Lista de entradas -->
+    <div id="entries-list" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden">
+        <p class="p-4 text-gray-500 text-sm">Selecciona un periodo y pulsa Consultar</p>
+    </div>
+</div>
+
+<!-- Modal crear/editar -->
+<div id="entry-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <h2 id="modal-title" class="text-lg font-bold text-gray-800 mb-4">Nueva entrada</h2>
+        <form id="entry-form" onsubmit="saveEntry(event)" class="space-y-3">
+            <input type="hidden" id="entry-id">
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Tipo</label>
+                <select id="entry-type" required class="w-full border rounded px-3 py-2 text-sm">
+                    <option value="INCOME">Ingreso</option>
+                    <option value="EXPENSE">Gasto</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Importe (€)</label>
+                <input type="number" id="entry-amount" step="0.01" min="0.01" required class="w-full border rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Descripción</label>
+                <input type="text" id="entry-description" required class="w-full border rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Categoría (opcional)</label>
+                <input type="text" id="entry-category" class="w-full border rounded px-3 py-2 text-sm" placeholder="Ej: Material, Alquiler, Sesiones...">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Fecha</label>
+                <input type="date" id="entry-date" required class="w-full border rounded px-3 py-2 text-sm">
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-sante-primary text-white py-2 rounded text-sm hover:bg-sante-primary/90">Guardar</button>
+                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth() || getRole() !== 'ADMIN') { window.location.href = '/dashboard'; }
+    setupNav();
+
+    document.getElementById('gate-password').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') verifyPassword();
+    });
+
+    async function verifyPassword() {
+        const password = document.getElementById('gate-password').value;
+        const res = await fetch('/api/auth/verify-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+            body: JSON.stringify({ password }),
+        });
+        if (res.ok) {
+            document.getElementById('password-gate').classList.add('hidden');
+            document.getElementById('finance-content').classList.remove('hidden');
+        } else {
+            document.getElementById('gate-error').classList.remove('hidden');
+        }
+    }
+
+    function getDateRange() {
+        const period = document.getElementById('period-select').value;
+        const today = new Date();
+        let start, end;
+
+        if (period === 'custom') {
+            start = document.getElementById('date-start').value;
+            end = document.getElementById('date-end').value;
+        } else if (period === 'month') {
+            start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+            end = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+        } else if (period === 'quarter') {
+            const qMonth = Math.floor(today.getMonth() / 3) * 3;
+            start = new Date(today.getFullYear(), qMonth, 1).toISOString().split('T')[0];
+            end = new Date(today.getFullYear(), qMonth + 3, 0).toISOString().split('T')[0];
+        } else {
+            start = `${today.getFullYear()}-01-01`;
+            end = `${today.getFullYear()}-12-31`;
+        }
+        return { start, end };
+    }
+
+    function onPeriodChange() {
+        const custom = document.getElementById('period-select').value === 'custom';
+        document.getElementById('custom-dates').classList.toggle('hidden', !custom);
+    }
+
+    async function loadData() {
+        const { start, end } = getDateRange();
+        if (!start || !end) return;
+
+        const [balRes, entRes] = await Promise.all([
+            authFetch(`/api/finance/balance?start=${start}&end=${end}`),
+            authFetch(`/api/finance/entries?start=${start}&end=${end}`)
+        ]);
+        const balance = await balRes.json();
+        const entries = await entRes.json();
+
+        document.getElementById('total-income').textContent = balance.income.toFixed(2) + ' €';
+        document.getElementById('total-expense').textContent = balance.expense.toFixed(2) + ' €';
+        const bal = balance.balance;
+        const balEl = document.getElementById('total-balance');
+        balEl.textContent = bal.toFixed(2) + ' €';
+        balEl.className = `text-2xl font-bold ${bal >= 0 ? 'text-green-600' : 'text-red-600'}`;
+
+        renderEntries(entries);
+    }
+
+    function renderEntries(entries) {
+        const container = document.getElementById('entries-list');
+        if (!entries.length) {
+            container.innerHTML = '<p class="p-4 text-gray-500 text-sm">No hay entradas en este periodo</p>';
+            return;
+        }
+        container.innerHTML = `
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Fecha</th>
+                        <th class="px-4 py-2 text-left">Tipo</th>
+                        <th class="px-4 py-2 text-left">Descripción</th>
+                        <th class="px-4 py-2 text-left">Categoría</th>
+                        <th class="px-4 py-2 text-right">Importe</th>
+                        <th class="px-4 py-2 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${entries.map(e => `
+                        <tr class="border-t">
+                            <td class="px-4 py-2">${formatDate(e.date)}</td>
+                            <td class="px-4 py-2">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium ${e.entry_type === 'INCOME' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                    ${e.entry_type === 'INCOME' ? 'Ingreso' : 'Gasto'}
+                                </span>
+                            </td>
+                            <td class="px-4 py-2">${e.description}</td>
+                            <td class="px-4 py-2 text-gray-500">${e.category || '-'}</td>
+                            <td class="px-4 py-2 text-right font-medium ${e.entry_type === 'INCOME' ? 'text-green-600' : 'text-red-600'}">${e.amount.toFixed(2)} €</td>
+                            <td class="px-4 py-2 text-center space-x-2">
+                                <button onclick="editEntry(${e.id}, '${e.entry_type}', ${e.amount}, '${e.description}', '${e.category || ''}', '${e.date}')" class="text-sante-primary hover:underline">Editar</button>
+                                <button onclick="deleteEntry(${e.id})" class="text-red-600 hover:underline">Eliminar</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function openModal() {
+        document.getElementById('entry-id').value = '';
+        document.getElementById('entry-type').value = 'INCOME';
+        document.getElementById('entry-amount').value = '';
+        document.getElementById('entry-description').value = '';
+        document.getElementById('entry-category').value = '';
+        document.getElementById('entry-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('modal-title').textContent = 'Nueva entrada';
+        document.getElementById('entry-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+        document.getElementById('entry-modal').classList.add('hidden');
+    }
+
+    function editEntry(id, type, amount, desc, cat, entryDate) {
+        document.getElementById('entry-id').value = id;
+        document.getElementById('entry-type').value = type;
+        document.getElementById('entry-amount').value = amount;
+        document.getElementById('entry-description').value = desc;
+        document.getElementById('entry-category').value = cat;
+        document.getElementById('entry-date').value = entryDate;
+        document.getElementById('modal-title').textContent = 'Editar entrada';
+        document.getElementById('entry-modal').classList.remove('hidden');
+    }
+
+    async function saveEntry(e) {
+        e.preventDefault();
+        const id = document.getElementById('entry-id').value;
+        const body = {
+            entry_type: document.getElementById('entry-type').value,
+            amount: parseFloat(document.getElementById('entry-amount').value),
+            description: document.getElementById('entry-description').value,
+            date: document.getElementById('entry-date').value,
+            category: document.getElementById('entry-category').value || null,
+        };
+
+        const url = id ? `/api/finance/entries/${id}` : '/api/finance/entries';
+        const method = id ? 'PUT' : 'POST';
+
+        const res = await authFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (res.ok) {
+            closeModal();
+            loadData();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al guardar', 'error');
+        }
+    }
+
+    async function deleteEntry(id) {
+        showConfirm('Eliminar entrada', '¿Estás seguro de que quieres eliminar esta entrada?', async () => {
+            const res = await authFetch(`/api/finance/entries/${id}`, { method: 'DELETE' });
+            if (res.ok) loadData();
+        });
+    }
+
+    // Cargar mes actual por defecto
+    loadData();
+</script>
+{% endblock %}

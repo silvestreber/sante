@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Santé - Panel{% endblock %}
+
+{% block content %}
+<div id="dashboard-content">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Panel principal</h1>
+    <p class="text-gray-600 mb-6">Bienvenido/a, <span id="welcome-name" class="font-medium"></span></p>
+
+    <div id="dashboard-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    document.getElementById('welcome-name').textContent = getFullName();
+
+    const role = getRole();
+    const cards = [
+        { title: 'Pacientes', desc: 'Gestionar pacientes', href: '/patients', roles: ['ADMIN','RECEPTION','PHYSIO'] },
+        { title: 'Calendario', desc: 'Ver y crear citas', href: '/calendar', roles: ['ADMIN','RECEPTION','PHYSIO'] },
+        { title: 'Facturación', desc: 'Pagos y facturas', href: '/billing', roles: ['ADMIN','RECEPTION','PHYSIO'] },
+        { title: 'Contabilidad', desc: 'Ingresos y gastos', href: '/finance', roles: ['ADMIN'] },
+        { title: 'Usuarios', desc: 'Gestionar usuarios', href: '/users', roles: ['ADMIN'] },
+        { title: 'Actividad', desc: 'Registro de acciones', href: '/audit', roles: ['ADMIN'] },
+    ];
+
+    const container = document.getElementById('dashboard-cards');
+    container.innerHTML = cards
+        .filter(c => c.roles.includes(role))
+        .map(c => `
+            <a href="${c.href}" class="block bg-white p-5 rounded-lg shadow hover:shadow-md transition border-2 border-sante-primary/40">
+                <h2 class="font-semibold text-sante-primary text-lg">${c.title}</h2>
+                <p class="text-gray-500 text-sm mt-1">${c.desc}</p>
+            </a>
+        `).join('');
+</script>
+{% endblock %}

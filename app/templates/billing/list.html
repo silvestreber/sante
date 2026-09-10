@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Santé - Facturación{% endblock %}
+
+{% block content %}
+<div>
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Facturación</h1>
+
+    <div class="mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3">Pacientes con pagos pendientes</h2>
+        <div id="pending-list" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden">
+            <p class="p-4 text-gray-500 text-sm">Cargando...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    async function loadPending() {
+        const res = await authFetch('/api/billing/pending');
+        const data = await res.json();
+        const container = document.getElementById('pending-list');
+
+        if (!data.length) {
+            container.innerHTML = '<p class="p-4 text-gray-500 text-sm">No hay pagos pendientes</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Paciente</th>
+                        <th class="px-4 py-2 text-right">Importe pendiente</th>
+                        <th class="px-4 py-2 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(p => `
+                        <tr class="border-t">
+                            <td class="px-4 py-2">${p.patient_name}</td>
+                            <td class="px-4 py-2 text-right font-medium text-red-600">${p.pending_amount.toFixed(2)} €</td>
+                            <td class="px-4 py-2 text-center">
+                                <a href="/patients/${p.patient_id}/billing" class="text-sante-primary hover:underline">Ver</a>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    loadPending();
+</script>
+{% endblock %}

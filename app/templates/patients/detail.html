@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+{% block title %}Santé - Ficha paciente{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h1 id="patient-name" class="text-2xl font-bold text-gray-800"></h1>
+        <div class="flex gap-2">
+            <div class="relative">
+                <button onclick="document.getElementById('actions-dropdown').classList.toggle('hidden')" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Más...</button>
+                <div id="actions-dropdown" class="hidden absolute right-0 mt-1 bg-white border-2 border-sante-primary/40 rounded-lg shadow-lg z-10 min-w-[180px]">
+                    <a id="treatments-btn" href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-sante-bg">Tratamientos</a>
+                    <a id="billing-btn" href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-sante-bg">Pagos</a>
+                    <a id="documents-btn" href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-sante-bg">Documentos</a>
+
+                </div>
+            </div>
+            <a href="/patients" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
+        </div>
+    </div>
+
+    <!-- Alergias destacadas -->
+    <div id="allergies-box" class="hidden mb-4 p-4 bg-red-50 border border-red-300 rounded-lg">
+        <p class="text-sm font-semibold text-red-700 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Alergias / Contraindicaciones</p>
+        <p id="allergies-text" class="text-sm text-red-800 mt-1"></p>
+    </div>
+
+    <!-- Datos del paciente -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 mb-6">
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div><dt class="text-gray-500">Teléfono</dt><dd id="p-phone" class="font-medium"></dd></div>
+            <div><dt class="text-gray-500">Email</dt><dd id="p-email" class="font-medium"></dd></div>
+            <div><dt class="text-gray-500">Dirección</dt><dd id="p-address" class="font-medium"></dd></div>
+            <div><dt class="text-gray-500">Fecha nacimiento</dt><dd id="p-birth" class="font-medium"></dd></div>
+            <div><dt class="text-gray-500">DNI/NIE</dt><dd id="p-dni" class="font-medium"></dd></div>
+            <div class="sm:col-span-2"><dt class="text-gray-500">Notas</dt><dd id="p-notes" class="font-medium whitespace-pre-wrap"></dd></div>
+            <div class="sm:col-span-2"><dd id="p-pack" class="font-medium">Cargando...</dd></div>
+        </dl>
+        <div class="mt-4 flex justify-end">
+            <a id="edit-btn" href="#" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Editar</a>
+        </div>
+    </div>
+
+    <!-- Historial clínico -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden mb-6">
+        <div class="flex items-center justify-between p-4 pb-2">
+            <h2 class="text-lg font-semibold text-gray-800">Historial clínico</h2>
+            <input type="text" id="history-search" placeholder="Buscar por fecha u observaciones..." class="border-2 border-sante-primary/40 rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-sante-primary">
+        </div>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-2 text-left">Fecha</th>
+                    <th class="px-4 py-2 text-left">Seguimiento</th>
+                    <th class="px-4 py-2 text-center">Pago</th>
+                    <th class="px-4 py-2 text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="sessions-body"></tbody>
+        </table>
+    </div>
+
+    <!-- Modal ver sesión -->
+    <div id="view-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Detalle de sesión</h2>
+            <dl class="space-y-2 text-sm">
+                <div><dt class="text-gray-500">Fecha</dt><dd id="vs-date" class="font-medium"></dd></div>
+                <div><dt class="text-gray-500">Fisioterapeuta</dt><dd id="vs-physio" class="font-medium"></dd></div>
+                <div><dt class="text-gray-500">Pago</dt><dd id="vs-payment" class="font-medium"></dd></div>
+                <div><dt class="text-gray-500">Seguimiento</dt><dd id="vs-observations" class="font-medium whitespace-pre-wrap"></dd></div>
+            </dl>
+            <div class="flex justify-end pt-4">
+                <button onclick="document.getElementById('view-session-modal').classList.add('hidden')" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal editar observaciones -->
+    <div id="edit-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Editar seguimiento</h2>
+            <form id="edit-session-form">
+                <input type="hidden" id="es-id">
+                <textarea id="es-observations" rows="5" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Seguimiento (opcional)"></textarea>
+                <div class="flex gap-2 pt-3">
+                    <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Guardar</button>
+                    <button type="button" onclick="document.getElementById('edit-session-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal registrar pago sesión -->
+    <div id="session-pay-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
+            <form id="session-pay-form">
+                <input type="hidden" id="sp-invoice-id">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Método de pago</label>
+                    <select id="sp-method" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                        <option value="CASH">Efectivo</option>
+                        <option value="BIZUM">Bizum</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Confirmar pago</button>
+                    <button type="button" onclick="document.getElementById('session-pay-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal registrar pago bono -->
+    <div id="pack-pay-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
+            <form id="pack-pay-form" class="space-y-3">
+                <input type="hidden" id="pp-invoice-id">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Método de pago</label>
+                    <select id="pp-method" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                        <option value="CASH">Efectivo</option>
+                        <option value="BIZUM">Bizum</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Confirmar pago</button>
+                    <button type="button" onclick="document.getElementById('pack-pay-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal crear bono -->
+    <div id="create-pack-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Crear bono</h2>
+            <form id="create-pack-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Nº de sesiones</label>
+                    <input type="number" id="cp-sessions" min="1" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Caducidad</label>
+                    <input type="date" id="cp-expires" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Importe</label>
+                    <input type="number" id="cp-amount" step="0.01" min="0" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Tipo de documento</label>
+                    <select id="cp-doc-type" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                        <option value="RECEIPT">Justificante</option>
+                        <option value="INVOICE">Factura</option>
+                        <option value="SIMPLIFIED_INVOICE">Factura simplificada</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Método de pago</label>
+                    <select id="cp-payment" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                        <option value="">Pendiente de pago</option>
+                        <option value="CASH">Efectivo</option>
+                        <option value="BIZUM">Bizum</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Crear bono</button>
+                    <button type="button" onclick="document.getElementById('create-pack-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    const patientId = window.location.pathname.split('/')[2];
+    document.getElementById('edit-btn').href = `/patients/${patientId}/edit`;
+    document.getElementById('treatments-btn').href = `/patients/${patientId}/treatments`;
+    document.getElementById('billing-btn').href = `/patients/${patientId}/billing`;
+    document.getElementById('documents-btn').href = `/patients/${patientId}/documents`;
+
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('actions-dropdown');
+        if (!e.target.closest('.relative')) dropdown.classList.add('hidden');
+    });
+
+    function loadPatient() {
+        authFetch(`/api/patients/${patientId}`)
+            .then(r => r.json())
+            .then(p => {
+                document.getElementById('patient-name').textContent = `${p.first_name} ${p.last_name}`;
+
+                // Comprobar pagos pendientes
+                authFetch(`/api/billing/invoices/patient/${patientId}`).then(r => r.json()).then(invoices => {
+                    const hasPending = invoices.some(i => !i.is_paid);
+                    if (hasPending) {
+                        document.getElementById('patient-name').innerHTML += ' <span class="text-red-600" title="Tiene pagos pendientes"><svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></span>';
+                    }
+                });
+
+                document.getElementById('p-phone').textContent = p.phone || '-';
+                document.getElementById('p-email').textContent = p.email || '-';
+                document.getElementById('p-address').textContent = p.address || '-';
+                document.getElementById('p-birth').textContent = formatDate(p.birth_date);
+                document.getElementById('p-dni').textContent = p.dni || '-';
+                document.getElementById('p-notes').textContent = p.notes || '-';
+
+
+                if (p.allergies) {
+                    document.getElementById('allergies-box').classList.remove('hidden');
+                    document.getElementById('allergies-text').textContent = p.allergies;
+                }
+            });
+    }
+
+    loadPatient();
+
+    // --- Bono resumen ---
+    async function loadPackSummary() {
+        const res = await authFetch(`/api/billing/packs/patient/${patientId}`);
+        const data = await res.json();
+        const el = document.getElementById('p-pack');
+        const activePack = data.find(p => p.active);
+        if (activePack) {
+            const pendingIcon = activePack.pending_invoice_id
+                ? `<button onclick="event.preventDefault(); event.stopPropagation(); openPackPayModal(${activePack.pending_invoice_id})" class="ml-2 text-red-600 hover:text-red-800" title="Pago pendiente"><svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></button>`
+                : '';
+            el.innerHTML = `
+                <a href="/patients/${patientId}/packs" class="block cursor-pointer hover:opacity-80">
+                <div class="grid grid-cols-3 gap-2 bg-green-50 border border-green-200 rounded overflow-hidden">
+                    <div class="px-3 py-1 text-xs text-gray-500">&nbsp;</div>
+                    <div class="px-3 py-1 text-xs text-gray-500 text-center">Sesiones consumidas</div>
+                    <div class="px-3 py-1 text-xs text-gray-500 text-right">Fecha de caducidad</div>
+                    <div class="px-3 py-2 text-green-700 font-medium">Bono activo${pendingIcon}</div>
+                    <div class="px-3 py-2 text-center font-medium">${activePack.used_sessions}/${activePack.total_sessions}</div>
+                    <div class="px-3 py-2 text-right text-gray-600">${formatDate(activePack.expires_at) || 'Sin caducidad'}</div>
+                </div>
+                </a>`;
+        } else {
+            el.innerHTML = '<div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-2"><a href="/patients/' + patientId + '/packs" class="text-gray-400 hover:underline">No tiene bonos activos</a><button onclick="openCreatePackModal()" class="text-xs bg-sante-primary text-white px-3 py-1 rounded hover:bg-sante-primary/90">Crear bono</button></div>';
+        }
+    }
+
+    function openPackPayModal(invoiceId) {
+        document.getElementById('pp-invoice-id').value = invoiceId;
+        document.getElementById('pack-pay-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('pack-pay-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const invoiceId = document.getElementById('pp-invoice-id').value;
+        const method = document.getElementById('pp-method').value;
+        const res = await authFetch(`/api/billing/invoices/${invoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payment_method: method, is_paid: true }),
+        });
+        if (res.ok) {
+            document.getElementById('pack-pay-modal').classList.add('hidden');
+            showToast('Pago registrado');
+            loadPackSummary();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al registrar pago', 'error');
+        }
+    });
+
+    function openCreatePackModal() {
+        document.getElementById('create-pack-form').reset();
+        authFetch('/api/config/settings').then(r => r.json()).then(s => {
+            if (s.default_pack_price) document.getElementById('cp-amount').value = s.default_pack_price;
+        });
+        document.getElementById('create-pack-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('create-pack-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const packBody = {
+            patient_id: parseInt(patientId),
+            total_sessions: parseInt(document.getElementById('cp-sessions').value),
+            price: parseFloat(document.getElementById('cp-amount').value),
+            expires_at: document.getElementById('cp-expires').value || null,
+        };
+        const packRes = await authFetch('/api/billing/packs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(packBody),
+        });
+        if (!packRes.ok) {
+            const err = await packRes.json();
+            showToast(err.detail || 'Error al crear bono', 'error');
+            return;
+        }
+        const packData = await packRes.json();
+        // Crear documento de cobro asociado
+        const invoiceBody = {
+            patient_id: parseInt(patientId),
+            session_pack_id: packData.id,
+            doc_type: document.getElementById('cp-doc-type').value,
+            amount: parseFloat(document.getElementById('cp-amount').value),
+            payment_method: document.getElementById('cp-payment').value || null,
+            is_paid: !!document.getElementById('cp-payment').value,
+        };
+        await authFetch('/api/billing/invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(invoiceBody),
+        });
+        document.getElementById('create-pack-modal').classList.add('hidden');
+        showToast('Bono creado');
+        loadPackSummary();
+    });
+
+    loadPackSummary();
+
+
+
+    // --- Historial clínico ---
+    const paymentLabels = { CASH: 'Efectivo', BIZUM: 'Bizum' };
+    let sessionsData = [];
+
+    async function loadHistory() {
+        const res = await authFetch(`/api/clinical/patient/${patientId}`);
+        const data = await res.json();
+        sessionsData = data.sessions;
+        filterAndRenderSessions();
+    }
+
+    function filterAndRenderSessions() {
+        const query = document.getElementById('history-search').value.trim().toLowerCase();
+        if (!query) {
+            renderSessions(sessionsData);
+            return;
+        }
+        const filtered = sessionsData.filter(s => {
+            const dateStr = formatDateTime(s.date).toLowerCase();
+            const obs = (s.observations || '').toLowerCase();
+            return dateStr.includes(query) || obs.includes(query);
+        });
+        renderSessions(filtered);
+    }
+
+    document.getElementById('history-search').addEventListener('input', filterAndRenderSessions);
+
+    function renderSessions(sessions) {
+        const tbody = document.getElementById('sessions-body');
+        if (!sessions.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-400">No hay sesiones registradas</td></tr>';
+            return;
+        }
+        tbody.innerHTML = sessions.map(s => {
+            const idx = sessionsData.indexOf(s);
+            const obs = s.observations ? (s.observations.length > 60 ? s.observations.substring(0, 60) + '...' : s.observations) : '<span class="text-gray-400">Sin seguimiento</span>';
+            let payBadge = '';
+            if (s.payment_method) {
+                payBadge = `<span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">${paymentLabels[s.payment_method] || s.payment_method}</span>`;
+            } else if (s.paid_with_pack) {
+                payBadge = '<span class="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700">Bono</span>';
+            } else {
+                payBadge = `<a href="#" onclick="openSessionPayModal(${idx}); return false;" class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 hover:bg-red-200 underline cursor-pointer" title="Registrar pago">Pendiente</a>`;
+            }
+            return `
+                <tr class="border-t hover:bg-gray-50 cursor-pointer" title="Ver cita" onclick="viewSession(${idx})">
+                    <td class="px-4 py-3">${formatDateTime(s.date)}</td>
+                    <td class="px-4 py-3 text-gray-600">${obs}</td>
+                    <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">${payBadge}</td>
+                    <td class="px-4 py-3 text-center space-x-1" onclick="event.stopPropagation()">
+                        <button onclick="editSession(${idx})" class="text-sante-primary hover:text-sante-primary/70" title="Editar seguimiento"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                        <button onclick="viewAttendance(${idx})" class="text-green-600 hover:text-green-400" title="Descargar justificante de asistencia"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                        <button onclick="emailAttendance(${idx})" class="text-amber-600 hover:text-amber-400" title="Enviar justificante por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function viewSession(idx) {
+        const s = sessionsData[idx];
+        document.getElementById('vs-date').textContent = formatDateTime(s.date);
+        document.getElementById('vs-physio').textContent = s.physio_name;
+        let pay = 'Pendiente';
+        if (s.payment_method) pay = paymentLabels[s.payment_method] || s.payment_method;
+        else if (s.paid_with_pack) pay = 'Bono';
+        document.getElementById('vs-payment').textContent = pay;
+        document.getElementById('vs-observations').textContent = s.observations || 'Sin seguimiento';
+        document.getElementById('view-session-modal').classList.remove('hidden');
+    }
+
+    function editSession(idx) {
+        const s = sessionsData[idx];
+        document.getElementById('es-id').value = s.id;
+        document.getElementById('es-observations').value = s.observations || '';
+        document.getElementById('edit-session-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('edit-session-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('es-id').value;
+        const res = await authFetch(`/api/clinical/sessions/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ observations: document.getElementById('es-observations').value || null }),
+        });
+        if (res.ok) {
+            document.getElementById('edit-session-modal').classList.add('hidden');
+            loadHistory();
+            showToast('Seguimiento actualizado');
+        }
+    });
+
+    function openSessionPayModal(idx) {
+        const s = sessionsData[idx];
+        document.getElementById('sp-invoice-id').value = s.invoice_id || '';
+        document.getElementById('session-pay-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('session-pay-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const invoiceId = document.getElementById('sp-invoice-id').value;
+        const method = document.getElementById('sp-method').value;
+        if (!invoiceId) {
+            showToast('No hay factura asociada', 'error');
+            document.getElementById('session-pay-modal').classList.add('hidden');
+            return;
+        }
+        const res = await authFetch(`/api/billing/invoices/${invoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payment_method: method, is_paid: true }),
+        });
+        if (res.ok) {
+            document.getElementById('session-pay-modal').classList.add('hidden');
+            showToast('Pago registrado');
+            loadHistory();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al registrar pago', 'error');
+        }
+    });
+
+    function getAttendanceParams(s) {
+        const dt = new Date(s.date);
+        const date = String(dt.getDate()).padStart(2, '0') + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + dt.getFullYear();
+        const time = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+        let params = `date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`;
+        if (s.duration_minutes) params += `&duration=${s.duration_minutes}`;
+        if (s.physio_name) params += `&physio_name=${encodeURIComponent(s.physio_name)}`;
+        return params;
+    }
+
+    function viewAttendance(idx) {
+        const s = sessionsData[idx];
+        const params = getAttendanceParams(s);
+        const token = getToken();
+        window.open(`/api/documents/attendance/${patientId}/pdf?${params}&token=${token}`, '_blank');
+    }
+
+    async function emailAttendance(idx) {
+        const s = sessionsData[idx];
+        const params = getAttendanceParams(s);
+        const res = await authFetch(`/api/documents/attendance/${patientId}/email?${params}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        if (res.ok) {
+            showToast('Justificante enviado por email');
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al enviar', 'error');
+        }
+    }
+
+    loadHistory();
+</script>
+{% endblock %}

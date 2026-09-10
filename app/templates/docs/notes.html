@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Santé - Notas{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Notas</h1>
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4">
+        <textarea id="notes-area" rows="16" class="w-full border-2 border-sante-primary/40 rounded px-4 py-3 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-sante-primary" placeholder="Escribe tus notas aquí..."></textarea>
+        <div class="flex items-center justify-between mt-3">
+            <span id="save-status" class="text-xs text-gray-400"></span>
+            <button onclick="saveNotes()" class="bg-sante-primary text-white px-6 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    async function loadNotes() {
+        const res = await authFetch('/api/notes');
+        const data = await res.json();
+        document.getElementById('notes-area').value = data.content || '';
+    }
+
+    async function saveNotes() {
+        const content = document.getElementById('notes-area').value;
+        const res = await authFetch('/api/notes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content }),
+        });
+        if (res.ok) {
+            document.getElementById('save-status').textContent = 'Guardado ' + new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
+            showToast('Notas guardadas');
+        }
+    }
+
+    loadNotes();
+</script>
+{% endblock %}

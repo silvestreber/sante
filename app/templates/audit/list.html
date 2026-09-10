@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Auditoría — Santé{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold text-sante-primary">Log de actividad</h1>
+</div>
+
+<div class="bg-white border-2 border-sante-primary/40 rounded shadow p-4 mb-4">
+    <form id="filter-form" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">Usuario</label>
+            <select id="f-user" class="w-full border rounded px-2 py-1 text-sm">
+                <option value="">Todos</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">Acción</label>
+            <select id="f-action" class="w-full border rounded px-2 py-1 text-sm">
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">Entidad</label>
+            <select id="f-entity" class="w-full border rounded px-2 py-1 text-sm">
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">Desde</label>
+            <input type="date" id="f-from" class="w-full border rounded px-2 py-1 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">Hasta</label>
+            <input type="date" id="f-to" class="w-full border rounded px-2 py-1 text-sm">
+        </div>
+    </form>
+    <div class="mt-3 flex gap-2">
+        <button onclick="loadLogs(1)" class="bg-sante-primary text-white px-4 py-1 rounded text-sm hover:bg-sante-primary/90">Filtrar</button>
+        <button onclick="clearFilters()" class="bg-gray-200 text-gray-700 px-4 py-1 rounded text-sm hover:bg-gray-300">Limpiar</button>
+    </div>
+</div>
+
+<div class="bg-white border-2 border-sante-primary/40 rounded shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-100">
+            <tr>
+                <th class="px-3 py-2 text-left">Fecha</th>
+                <th class="px-3 py-2 text-left">Usuario</th>
+                <th class="px-3 py-2 text-left">Acción</th>
+                <th class="px-3 py-2 text-left">Entidad</th>
+                <th class="px-3 py-2 text-left">ID</th>
+                <th class="px-3 py-2 text-left">Detalle</th>
+            </tr>
+        </thead>
+        <tbody id="logs-body"></tbody>
+    </table>
+</div>
+
+<div class="flex justify-center mt-4">
+    <div id="pagination" class="inline-flex gap-2 bg-white border-2 border-sante-primary/40 rounded-lg shadow p-3 hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+
+async function loadFilters() {
+    const [usersRes, actionsRes, entitiesRes] = await Promise.all([
+        authFetch('/api/notifications/users'),
+        authFetch('/api/audit/actions'),
+        authFetch('/api/audit/entity-types'),
+    ]);
+    const users = await usersRes.json();
+    const actions = await actionsRes.json();
+    const entities = await entitiesRes.json();
+
+    const uSel = document.getElementById('f-user');
+    users.forEach(u => { uSel.innerHTML += `<option value="${u.id}">${u.full_name}</option>`; });
+
+    const aSel = document.getElementById('f-action');
+    actions.forEach(a => { aSel.innerHTML += `<option value="${a}">${a}</option>`; });
+
+    const eSel = document.getElementById('f-entity');
+    entities.forEach(e => { eSel.innerHTML += `<option value="${e}">${e}</option>`; });
+}
+
+async function loadLogs(page = 1) {
+    currentPage = page;
+    const params = new URLSearchParams({ page, size: 50 });
+    const userId = document.getElementById('f-user').value;
+    const action = document.getElementById('f-action').value;
+    const entity = document.getElementById('f-entity').value;
+    const from = document.getElementById('f-from').value;
+    const to = document.getElementById('f-to').value;
+
+    if (userId) params.append('user_id', userId);
+    if (action) params.append('action', action);
+    if (entity) params.append('entity_type', entity);
+    if (from) params.append('date_from', from);
+    if (to) params.append('date_to', to);
+
+    const res = await authFetch(`/api/audit?${params}`);
+    const data = await res.json();
+
+    const tbody = document.getElementById('logs-body');
+    if (!data.logs.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-center text-gray-500">No hay registros</td></tr>';
+    } else {
+        tbody.innerHTML = data.logs.map(l => `
+            <tr class="border-t hover:bg-gray-50">
+                <td class="px-3 py-2 whitespace-nowrap">${formatDateTime(l.created_at)}</td>
+                <td class="px-3 py-2">${l.user_name}</td>
+                <td class="px-3 py-2"><span class="bg-sante-bg text-sante-primary px-2 py-0.5 rounded text-xs">${l.action}</span></td>
+                <td class="px-3 py-2">${l.entity_type}</td>
+                <td class="px-3 py-2">${l.entity_id || '-'}</td>
+                <td class="px-3 py-2 text-gray-600">${l.detail || ''}</td>
+            </tr>
+        `).join('');
+    }
+
+    const pag = document.getElementById('pagination');
+    if (data.pages > 1) {
+        let html = '';
+        for (let i = 1; i <= data.pages; i++) {
+            html += `<button onclick="loadLogs(${i})" class="px-3 py-1 rounded text-sm ${i === page ? 'bg-sante-primary text-white' : 'bg-gray-200'}">${i}</button>`;
+        }
+        pag.innerHTML = html;
+        pag.classList.remove('hidden');
+    } else {
+        pag.innerHTML = '';
+        pag.classList.add('hidden');
+    }
+}
+
+function clearFilters() {
+    document.getElementById('f-user').value = '';
+    document.getElementById('f-action').value = '';
+    document.getElementById('f-entity').value = '';
+    document.getElementById('f-from').value = '';
+    document.getElementById('f-to').value = '';
+    loadLogs(1);
+}
+
+loadFilters();
+loadLogs();
+</script>
+{% endblock %}

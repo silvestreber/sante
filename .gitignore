@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# --- Entorno / secretos ---
+.env
+.env.local
+.env.*
+
+# --- Bases de datos (DATOS DE PACIENTES - NO SUBIR) ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Backups (NO SUBIR) ---
+backups/*
+!backups/.gitkeep
+
+# --- Logs ---
+app/logs/*
+!app/logs/.gitkeep
+*.log
+
+# --- Documentos y datos sensibles de pacientes (NO SUBIR) ---
+uploads/*
+!uploads/.gitkeep
+app/static/invoices/*.pdf
+app/static/docs/blank_pdfs/*.pdf
+documentos_firmados/
+
+# --- Ficheros de datos reales del cliente (NO SUBIR) ---
+Eugenia*.xlsx
+*.xlsx
+HISTORIA FISIOTERAPIA.doc
+*.doc
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db

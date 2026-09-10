@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+{% block title %}Santé - Facturación paciente{% endblock %}
+
+{% block content %}
+<div>
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-bold text-gray-800">Facturación: <span id="patient-name"></span></h1>
+        <a id="back-link" href="#" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
+    </div>
+
+    <!-- Crear factura -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 mb-6">
+        <h2 class="font-semibold text-gray-700 mb-3">Nuevo documento de cobro</h2>
+        <form id="invoice-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <select id="inv-doc-type" class="border rounded px-3 py-2 text-sm" required>
+                <option value="RECEIPT">Justificante</option>
+                <option value="INVOICE">Factura</option>
+                <option value="SIMPLIFIED_INVOICE">Factura simplificada</option>
+            </select>
+            <input id="inv-amount" type="number" step="0.01" min="0" placeholder="Importe (€)" class="border rounded px-3 py-2 text-sm" required>
+            <select id="inv-appointment" class="border rounded px-3 py-2 text-sm">
+                <option value="">Sin cita asociada</option>
+            </select>
+            <select id="inv-pack" class="border rounded px-3 py-2 text-sm">
+                <option value="">Sin bono asociado</option>
+            </select>
+            <select id="inv-payment" class="border rounded px-3 py-2 text-sm">
+                <option value="">Pendiente de pago</option>
+                <option value="CASH">Efectivo</option>
+                <option value="BIZUM">Bizum</option>
+            </select>
+            <button type="submit" class="bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Crear</button>
+        </form>
+    </div>
+
+    <!-- Lista de facturas -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow mb-6">
+        <h2 class="font-semibold text-gray-700 p-4 pb-2">Documentos de cobro</h2>
+        <div id="invoices-list" class="p-4 pt-0">
+            <p class="text-gray-500 text-sm">Cargando...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal editar factura -->
+<div id="edit-invoice-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Editar documento de cobro</h2>
+        <form id="edit-invoice-form" class="space-y-3">
+            <input type="hidden" id="edit-inv-id">
+            <div>
+                <label class="text-sm text-gray-600">Tipo documento</label>
+                <select id="edit-inv-doc-type" class="w-full border rounded px-3 py-2 text-sm">
+                    <option value="RECEIPT">Justificante</option>
+                    <option value="INVOICE">Factura</option>
+                    <option value="SIMPLIFIED_INVOICE">Factura simplificada</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Importe (€)</label>
+                <input id="edit-inv-amount" type="number" step="0.01" min="0" class="w-full border rounded px-3 py-2 text-sm" required>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Método de pago</label>
+                <select id="edit-inv-payment" class="w-full border rounded px-3 py-2 text-sm">
+                    <option value="">Pendiente de pago</option>
+                    <option value="CASH">Efectivo</option>
+                    <option value="BIZUM">Bizum</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Cita asociada</label>
+                <select id="edit-inv-appointment" class="w-full border rounded px-3 py-2 text-sm">
+                    <option value="">Sin cita asociada</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Bono asociado</label>
+                <select id="edit-inv-pack" class="w-full border rounded px-3 py-2 text-sm">
+                    <option value="">Sin bono asociado</option>
+                </select>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Guardar</button>
+                <button type="button" onclick="closeEditModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal registrar pago -->
+<div id="billing-pay-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
+        <form id="billing-pay-form" class="space-y-3">
+            <input type="hidden" id="bp-invoice-id">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Método de pago</label>
+                <select id="bp-method" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                    <option value="CASH">Efectivo</option>
+                    <option value="BIZUM">Bizum</option>
+                    <option value="PACK" id="bp-pack-option" class="hidden">Bono</option>
+                </select>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Confirmar pago</button>
+                <button type="button" onclick="document.getElementById('billing-pay-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal email -->
+<div id="email-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Email no configurado</h2>
+        <p class="text-sm text-gray-600 mb-4">Este paciente no tiene email registrado. Introduce uno para enviar el documento:</p>
+        <input type="email" id="email-input" placeholder="email@ejemplo.com" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm mb-4" required>
+        <div class="flex gap-2">
+            <button onclick="saveEmailAndSend()" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Guardar y enviar</button>
+            <button onclick="closeEmailModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cerrar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    const patientId = window.location.pathname.split('/')[2];
+    document.getElementById('back-link').href = `/patients/${patientId}`;
+
+    async function loadPatient() {
+        const res = await authFetch(`/api/patients/${patientId}`);
+        const p = await res.json();
+        document.getElementById('patient-name').textContent = `${p.first_name} ${p.last_name}`;
+    }
+
+    async function loadAppointments() {
+        const now = new Date();
+        const past = new Date(now.getTime() - 365 * 86400000);
+        const res = await authFetch(`/api/appointments?start=${past.toISOString()}&end=${now.toISOString()}&patient_id=${patientId}`);
+        const apts = await res.json();
+        const invRes = await authFetch(`/api/billing/invoices/patient/${patientId}`);
+        const invoices = await invRes.json();
+        const paidAptIds = invoices.filter(i => i.appointment_id).map(i => i.appointment_id);
+
+        const select = document.getElementById('inv-appointment');
+        apts.filter(a => a.status === 'FINALIZED' && !paidAptIds.includes(a.id)).forEach(a => {
+            const dt = new Date(a.start_time);
+            const label = `${formatDate(a.start_time)} ${dt.toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'})} - ${a.physio_name}`;
+            select.innerHTML += `<option value="${a.id}">${label}</option>`;
+        });
+    }
+
+    async function loadPacks() {
+        const res = await authFetch(`/api/billing/packs/patient/${patientId}`);
+        const packs = await res.json();
+        const select = document.getElementById('inv-pack');
+        packs.filter(p => !p.is_cancelled && p.pending_invoice_id).forEach(p => {
+            const expired = p.expired ? ' (CADUCADO)' : '';
+            select.innerHTML += `<option value="${p.id}">Bono ${p.total_sessions} sesiones (${p.remaining} restantes) - ${p.price.toFixed(2)}&euro;${expired}</option>`;
+        });
+    }
+
+    async function loadInvoices() {
+        const res = await authFetch(`/api/billing/invoices/patient/${patientId}`);
+        const data = await res.json();
+        const container = document.getElementById('invoices-list');
+
+        if (!data.length) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">Sin documentos</p>';
+            return;
+        }
+
+        const typeLabels = { INVOICE: 'Factura', SIMPLIFIED_INVOICE: 'F. Simplificada', RECEIPT: 'Justificante' };
+        const methodLabels = { CASH: 'Efectivo', BIZUM: 'Bizum' };
+
+        container.innerHTML = `
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Fecha cobro</th>
+                        <th class="px-3 py-2 text-left">Tipo</th>
+                        <th class="px-3 py-2 text-left">Asociado a</th>
+                        <th class="px-3 py-2 text-right">Importe</th>
+                        <th class="px-3 py-2 text-center">Método</th>
+                        <th class="px-3 py-2 text-center">Estado</th>
+                        <th class="px-3 py-2 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(i => `
+                        <tr class="border-t">
+                            <td class="px-3 py-2 text-xs">${i.is_paid ? formatDate(i.created_at) : '-'}</td>
+                            <td class="px-3 py-2">${typeLabels[i.doc_type] || i.doc_type}</td>
+                            <td class="px-3 py-2">${i.appointment_date || i.session_pack_label || '-'}</td>
+                            <td class="px-3 py-2 text-right">${i.amount.toFixed(2)} €</td>
+                            <td class="px-3 py-2 text-center">${i.payment_method ? methodLabels[i.payment_method] : '-'}</td>
+                            <td class="px-3 py-2 text-center">
+                                <span class="px-2 py-0.5 rounded text-xs ${i.is_paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                    ${i.is_paid ? 'Pagado' : 'Pendiente'}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-center space-x-1">
+                                <button onclick="openEditModal(${JSON.stringify(i).replace(/"/g, '&quot;')})" class="text-yellow-600 hover:text-yellow-400" title="Editar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
+                                ${!i.is_paid ? `<button onclick="openPayModal(${i.id}, ${i.appointment_id ? 'true' : 'false'})" class="text-sante-primary hover:text-sante-primary/70" title="Registrar pago"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></button>` : ''}
+                                <button onclick="viewInvoicePdf(${i.id})" class="text-blue-600 hover:text-blue-400" title="Ver documento"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                                <button onclick="sendInvoiceEmail(${i.id})" class="text-purple-600 hover:text-purple-400" title="Enviar documento de cobro por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                <button onclick="deleteInvoice(${i.id}, '${i.invoice_number}')" class="text-red-500 hover:text-red-700" title="Eliminar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    // Create invoice
+    document.getElementById('invoice-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+            patient_id: parseInt(patientId),
+            doc_type: document.getElementById('inv-doc-type').value,
+            amount: parseFloat(document.getElementById('inv-amount').value),
+            appointment_id: document.getElementById('inv-appointment').value ? parseInt(document.getElementById('inv-appointment').value) : null,
+            session_pack_id: document.getElementById('inv-pack').value ? parseInt(document.getElementById('inv-pack').value) : null,
+            payment_method: document.getElementById('inv-payment').value || null,
+            is_paid: !!document.getElementById('inv-payment').value,
+        };
+        const res = await authFetch('/api/billing/invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            e.target.reset();
+            loadInvoices();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al crear documento', 'error');
+        }
+    });
+
+    // Editar factura
+    function openEditModal(inv) {
+        document.getElementById('edit-inv-id').value = inv.id;
+        document.getElementById('edit-inv-doc-type').value = inv.doc_type;
+        document.getElementById('edit-inv-amount').value = inv.amount;
+        document.getElementById('edit-inv-payment').value = inv.payment_method || '';
+        // Poblar selects de cita y bono
+        const aptSelect = document.getElementById('edit-inv-appointment');
+        const packSelect = document.getElementById('edit-inv-pack');
+        aptSelect.innerHTML = '<option value="">Sin cita asociada</option>';
+        packSelect.innerHTML = '<option value="">Sin bono asociado</option>';
+        // Copiar opciones del formulario de creación
+        document.getElementById('inv-appointment').querySelectorAll('option').forEach(o => {
+            if (o.value) aptSelect.innerHTML += `<option value="${o.value}">${o.textContent}</option>`;
+        });
+        // Añadir la cita actual si no está en la lista
+        if (inv.appointment_id && !aptSelect.querySelector(`option[value="${inv.appointment_id}"]`)) {
+            aptSelect.innerHTML += `<option value="${inv.appointment_id}">${inv.appointment_date || 'Cita #' + inv.appointment_id}</option>`;
+        }
+        document.getElementById('inv-pack').querySelectorAll('option').forEach(o => {
+            if (o.value) packSelect.innerHTML += `<option value="${o.value}">${o.textContent}</option>`;
+        });
+        if (inv.session_pack_id && !packSelect.querySelector(`option[value="${inv.session_pack_id}"]`)) {
+            packSelect.innerHTML += `<option value="${inv.session_pack_id}">${inv.session_pack_label || 'Bono #' + inv.session_pack_id}</option>`;
+        }
+        aptSelect.value = inv.appointment_id || '';
+        packSelect.value = inv.session_pack_id || '';
+        document.getElementById('edit-invoice-modal').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-invoice-modal').classList.add('hidden');
+    }
+
+    document.getElementById('edit-invoice-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit-inv-id').value;
+        const aptVal = document.getElementById('edit-inv-appointment').value;
+        const packVal = document.getElementById('edit-inv-pack').value;
+        const paymentVal = document.getElementById('edit-inv-payment').value;
+        const body = {
+            doc_type: document.getElementById('edit-inv-doc-type').value,
+            amount: parseFloat(document.getElementById('edit-inv-amount').value),
+            payment_method: paymentVal || null,
+            is_paid: !!paymentVal,
+            appointment_id: aptVal ? parseInt(aptVal) : null,
+            session_pack_id: packVal ? parseInt(packVal) : null,
+            clear_appointment: !aptVal,
+            clear_session_pack: !packVal,
+        };
+        const res = await authFetch(`/api/billing/invoices/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            closeEditModal();
+            showToast('Documento actualizado');
+            loadInvoices();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al actualizar', 'error');
+        }
+    });
+
+    // Registrar pago
+    function openPayModal(invoiceId, isSession) {
+        document.getElementById('bp-invoice-id').value = invoiceId;
+        const packOption = document.getElementById('bp-pack-option');
+        if (isSession) {
+            packOption.classList.remove('hidden');
+        } else {
+            packOption.classList.add('hidden');
+        }
+        document.getElementById('bp-method').value = 'CASH';
+        document.getElementById('billing-pay-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('billing-pay-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const invoiceId = document.getElementById('bp-invoice-id').value;
+        const method = document.getElementById('bp-method').value;
+        const body = { is_paid: true };
+        if (method !== 'PACK') {
+            body.payment_method = method;
+        }
+        const res = await authFetch(`/api/billing/invoices/${invoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            document.getElementById('billing-pay-modal').classList.add('hidden');
+            showToast('Pago registrado');
+            loadInvoices();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al registrar pago', 'error');
+        }
+    });
+
+    // Ver PDF
+    function viewInvoicePdf(id) {
+        authFetch(`/api/billing/invoices/${id}/pdf`)
+            .then(r => {
+                if (!r.ok) { showToast('PDF no disponible', 'error'); return; }
+                return r.blob();
+            })
+            .then(blob => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+            });
+    }
+
+    // Enviar por email
+    let pendingEmailInvoiceId = null;
+    let patientEmail = null;
+
+    async function sendInvoiceEmail(invoiceId) {
+        // Obtener email del paciente
+        const res = await authFetch(`/api/patients/${patientId}`);
+        const patient = await res.json();
+        patientEmail = patient.email;
+
+        if (!patientEmail) {
+            pendingEmailInvoiceId = invoiceId;
+            document.getElementById('email-input').value = '';
+            document.getElementById('email-modal').classList.remove('hidden');
+            return;
+        }
+
+        doSendEmail(invoiceId, patientEmail);
+    }
+
+    async function saveEmailAndSend() {
+        const email = document.getElementById('email-input').value.trim();
+        if (!email) { showToast('Introduce un email', 'error'); return; }
+
+        // Actualizar paciente con el email
+        const formData = new FormData();
+        const patRes = await authFetch(`/api/patients/${patientId}`);
+        const pat = await patRes.json();
+        formData.append('first_name', pat.first_name);
+        formData.append('last_name', pat.last_name);
+        formData.append('phone', pat.phone);
+        formData.append('email', email);
+        if (pat.address) formData.append('address', pat.address);
+        if (pat.birth_date) formData.append('birth_date', pat.birth_date);
+        if (pat.dni) formData.append('dni', pat.dni);
+        if (pat.allergies) formData.append('allergies', pat.allergies);
+        if (pat.notes) formData.append('notes', pat.notes);
+        formData.append('consent_signed', pat.consent_signed);
+
+        await authFetch(`/api/patients/${patientId}`, { method: 'PUT', body: formData });
+
+        closeEmailModal();
+        doSendEmail(pendingEmailInvoiceId, email);
+    }
+
+    async function doSendEmail(invoiceId, email) {
+        const res = await authFetch(`/api/documents/invoice/${invoiceId}/email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        if (res.ok) {
+            showToast('Email enviado correctamente');
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al enviar email', 'error');
+        }
+    }
+
+    function closeEmailModal() {
+        document.getElementById('email-modal').classList.add('hidden');
+        pendingEmailInvoiceId = null;
+    }
+
+    // Eliminar factura
+    let pendingDeleteInvoiceId = null;
+    let pendingDeleteInvoiceNumber = null;
+
+    function deleteInvoice(id, number) {
+        pendingDeleteInvoiceId = id;
+        pendingDeleteInvoiceNumber = number;
+        showConfirm('Eliminar documento', 'Se eliminara el documento ' + number + ' y su PDF asociado. Esta accion no se puede deshacer.', async () => {
+            const res = await authFetch(`/api/billing/invoices/${pendingDeleteInvoiceId}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast('Documento eliminado');
+                loadInvoices();
+            } else {
+                const err = await res.json();
+                showToast(err.detail || 'Error al eliminar', 'error');
+            }
+        });
+    }
+
+    loadPatient();
+    loadAppointments();
+    loadPacks();
+    loadInvoices();
+</script>
+{% endblock %}

@@ -1,0 +1,766 @@
+﻿{% extends "base.html" %}
+{% block title %}Configuración — Santé{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">Configuración</h1>
+
+<!-- Tabs -->
+<div class="flex gap-2 mb-6 border-b flex-wrap">
+    <button onclick="showTab('schedule')" id="tab-schedule" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-sante-primary text-sante-primary admin-only">Horario semanal</button>
+    <button onclick="showTab('special')" id="tab-special" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Horarios especiales</button>
+    <button onclick="showTab('holidays')" id="tab-holidays" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Festivos</button>
+    <button onclick="showTab('physio-hours')" id="tab-physio-hours" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Disponibilidad fisios</button>
+    <button onclick="showTab('general')" id="tab-general" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">General</button>
+    <button onclick="showTab('import')" id="tab-import" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">Importar datos</button>
+    <button onclick="showTab('export-billing')" id="tab-export-billing" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Exportar gestoría</button>
+    <button onclick="showTab('backup')" id="tab-backup" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Backup</button>
+</div>
+
+<!-- Tab: Horario semanal -->
+<div id="panel-schedule">
+    <p class="text-sm text-gray-500 mb-4">Configura el horario de apertura para cada día de la semana. Deja vacío si es jornada continua (sin pausa).</p>
+    <form id="schedule-form" class="space-y-3">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Día</th>
+                        <th class="px-3 py-2">Mañana abre</th>
+                        <th class="px-3 py-2">Mañana cierra</th>
+                        <th class="px-3 py-2">Tarde abre</th>
+                        <th class="px-3 py-2">Tarde cierra</th>
+                        <th class="px-3 py-2">Cerrado</th>
+                    </tr>
+                </thead>
+                <tbody id="schedule-body"></tbody>
+            </table>
+        </div>
+        <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Guardar horario</button>
+    </form>
+</div>
+
+<!-- Tab: Horarios especiales -->
+<div id="panel-special" class="hidden">
+    <p class="text-sm text-gray-500 mb-4">Horarios que aplican solo durante un periodo concreto (ej: verano, Navidad).</p>
+
+    <div id="special-list" class="space-y-3 mb-6"></div>
+
+    <details class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4">
+        <summary class="cursor-pointer font-medium text-sante-primary">+ Nuevo horario especial</summary>
+        <form id="special-form" class="mt-4 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="text-xs text-gray-500">Nombre</label>
+                    <input type="text" id="sp-name" required class="w-full border rounded px-3 py-2 text-sm" placeholder="Ej: Horario verano">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">Desde</label>
+                    <input type="date" id="sp-from" required class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">Hasta</label>
+                    <input type="date" id="sp-to" required class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Día</th>
+                            <th class="px-3 py-2">Mañana abre</th>
+                            <th class="px-3 py-2">Mañana cierra</th>
+                            <th class="px-3 py-2">Tarde abre</th>
+                            <th class="px-3 py-2">Tarde cierra</th>
+                            <th class="px-3 py-2">Cerrado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="special-body"></tbody>
+                </table>
+            </div>
+            <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Crear horario especial</button>
+        </form>
+    </details>
+</div>
+
+<!-- Tab: Festivos -->
+<div id="panel-holidays" class="hidden">
+    <p class="text-sm text-gray-500 mb-4">Días en los que la clínica está cerrada. No se podrán asignar citas.</p>
+
+    <form id="holiday-form" class="flex flex-col sm:flex-row gap-2 mb-6">
+        <input type="date" id="hol-date" required class="border rounded px-3 py-2 text-sm">
+        <input type="text" id="hol-name" placeholder="Nombre (opcional)" class="border rounded px-3 py-2 text-sm flex-1">
+        <button type="submit" class="bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Añadir festivo</button>
+    </form>
+
+    <div id="holidays-list" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow divide-y"></div>
+</div>
+
+<!-- Tab: Disponibilidad fisios -->
+<div id="panel-physio-hours" class="hidden">
+    <div class="mb-4">
+        <label class="text-sm text-gray-600">Seleccionar fisioterapeuta</label>
+        <select id="physio-select" onchange="loadPhysioSchedule(); loadPhysioAbsences()" class="border rounded px-3 py-2 text-sm ml-2"></select>
+    </div>
+
+    <!-- Sub: Horario semanal -->
+    <h3 class="font-semibold text-gray-700 mb-2">Horario semanal</h3>
+    <p class="text-sm text-gray-500 mb-3">Si se crea una cita fuera de su horario, se mostrará un aviso (pero se permite guardar).</p>
+    <form id="physio-schedule-form" class="space-y-3 mb-8">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Día</th>
+                        <th class="px-3 py-2">Mañana abre</th>
+                        <th class="px-3 py-2">Mañana cierra</th>
+                        <th class="px-3 py-2">Tarde abre</th>
+                        <th class="px-3 py-2">Tarde cierra</th>
+                        <th class="px-3 py-2">Libre</th>
+                    </tr>
+                </thead>
+                <tbody id="physio-schedule-body"></tbody>
+            </table>
+        </div>
+        <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Guardar horario</button>
+    </form>
+
+    <!-- Sub: Ausencias y vacaciones -->
+    <h3 class="font-semibold text-gray-700 mb-2">Ausencias y vacaciones</h3>
+    <p class="text-sm text-gray-500 mb-3">Registra ausencias puntuales (horas sueltas), días libres o periodos de vacaciones.</p>
+
+    <form id="absence-form" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 space-y-3 mb-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+                <label class="text-xs text-gray-500">Fecha inicio</label>
+                <input type="date" id="abs-date-from" required class="w-full border rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Fecha fin</label>
+                <input type="date" id="abs-date-to" class="w-full border rounded px-3 py-2 text-sm">
+                <p class="text-xs text-gray-400 mt-0.5">Dejar vacío = solo el día de inicio</p>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+                <label class="text-xs text-gray-500">Hora desde (opcional)</label>
+                <input type="time" id="abs-time-from" class="w-full border rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Hora hasta (opcional)</label>
+                <input type="time" id="abs-time-to" class="w-full border rounded px-3 py-2 text-sm">
+            </div>
+        </div>
+        <p class="text-xs text-gray-400">Si no indicas horas, la ausencia es de día completo.</p>
+        <div>
+            <label class="text-xs text-gray-500">Motivo (opcional)</label>
+            <input type="text" id="abs-reason" class="w-full border rounded px-3 py-2 text-sm" placeholder="Ej: Vacaciones, formación, asuntos propios...">
+        </div>
+        <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Añadir ausencia</button>
+    </form>
+
+    <div id="absences-list" class="space-y-2"></div>
+</div>
+
+<!-- Tab: General -->
+<div id="panel-general" class="hidden">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md">
+        <h2 class="font-semibold text-gray-700 mb-4">Configuración general</h2>
+        <form id="settings-form" class="space-y-4">
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Duración predeterminada de cita (minutos)</label>
+                <select id="setting-duration" class="border rounded px-3 py-2 text-sm">
+                    <option value="30">30 min</option>
+                    <option value="45">45 min</option>
+                    <option value="60">60 min</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Precio sesión por defecto (€)</label>
+                <input type="number" id="setting-session-price" step="0.01" min="0" class="border rounded px-3 py-2 text-sm w-32">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Precio bono por defecto (€)</label>
+                <input type="number" id="setting-pack-price" step="0.01" min="0" class="border rounded px-3 py-2 text-sm w-32">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Mensaje recordatorio WhatsApp</label>
+                <textarea id="setting-whatsapp" rows="3" class="w-full border rounded px-3 py-2 text-sm" placeholder="Usa {nombre}, {fecha} y {hora} como variables"></textarea>
+                <p class="text-xs text-gray-400 mt-1">Variables: {nombre}, {fecha}, {hora}</p>
+            </div>
+            <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Guardar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Tab: Importar datos -->
+<div id="panel-import" class="hidden">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md">
+        <h2 class="font-semibold text-gray-700 mb-2">Importar pacientes desde Excel</h2>
+        <p class="text-sm text-gray-500 mb-4">Selecciona un archivo Excel con la hoja <strong>CLIENTES</strong>. Los pacientes con teléfono o DNI ya existente se omitirán automáticamente.</p>
+        <p class="text-xs text-gray-400 mb-4">Columnas esperadas: <code>PACIENTE</code> (nombre completo, formato "Apellidos, Nombre"), <code>NIF</code>, <code>DIRECCIÓN</code>, <code>POSTAL</code>, <code>POBLACIÓN</code>, <code>PROVINCIA</code>, <code>Teléfono</code>, <code>Mail</code>.</p>
+        <form id="import-excel-form" class="space-y-3">
+            <input type="file" id="import-excel-file" accept=".xlsx,.xls" required
+                class="w-full text-sm border-2 border-sante-primary/40 rounded px-3 py-2">
+            <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Importar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Tab: Exportar gestoría -->
+<div id="panel-export-billing" class="hidden">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md">
+        <h2 class="font-semibold text-gray-700 mb-2">Exportar facturación para gestoría</h2>
+        <p class="text-sm text-gray-500 mb-4">Genera el Excel de gestoría con los clientes nuevos y las facturas pagadas del periodo seleccionado. El archivo se basa en la plantilla <strong>Eugenia Facturación.xlsx</strong> de la raíz del proyecto.</p>
+        <form id="export-billing-form" class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Fecha inicio</label>
+                    <input type="date" id="export-date-from" required class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Fecha fin</label>
+                    <input type="date" id="export-date-to" required class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Descargar Excel
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Tab: Backup -->
+<div id="panel-backup" class="hidden">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md space-y-6">
+        <div>
+            <h2 class="font-semibold text-gray-700 mb-3">Exportar copia de seguridad</h2>
+            <p class="text-sm text-gray-500 mb-3">Descarga una copia completa de la base de datos.</p>
+            <form id="export-form" class="space-y-3">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Contraseña</label>
+                    <input type="password" id="export-password" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                </div>
+                <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Descargar backup</button>
+            </form>
+        </div>
+        <hr>
+        <div>
+            <h2 class="font-semibold text-red-700 mb-3">Restaurar copia de seguridad</h2>
+            <p class="text-sm text-red-600 mb-3">Se eliminarán todos los datos actuales y se reemplazarán por los del archivo importado.</p>
+            <form id="import-form" class="space-y-3">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Archivo .db</label>
+                    <input type="file" id="import-file" accept=".db" class="w-full text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Contraseña</label>
+                    <input type="password" id="import-password" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                </div>
+                <button type="submit" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 text-sm font-medium">Restaurar backup</button>
+            </form>
+        </div>
+        <hr>
+        <div>
+            <h2 class="font-semibold text-gray-700 mb-3">Apagar sistema</h2>
+            <p class="text-sm text-gray-500 mb-3">Apaga la Raspberry Pi de forma segura. Espera a que el LED verde deje de parpadear antes de desenchufar.</p>
+            <button onclick="shutdownSystem()" class="bg-gray-800 text-white px-6 py-2 rounded hover:bg-gray-900 text-sm font-medium">Apagar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+if (!checkAuth()) { window.location.href = '/login'; }
+setupNav();
+const role = getRole();
+if (role !== 'ADMIN' && role !== 'RECEPTION') { window.location.href = '/calendar'; }
+
+// Ocultar tabs exclusivos de admin si es recepción
+if (role !== 'ADMIN') {
+    document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+    showTab('import');
+}
+
+const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+function showTab(tab) {
+    document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('border-sante-primary','text-sante-primary'); b.classList.add('border-transparent','text-gray-500'); });
+    document.getElementById('panel-' + tab).classList.remove('hidden');
+    const btn = document.getElementById('tab-' + tab);
+    btn.classList.add('border-sante-primary','text-sante-primary');
+    btn.classList.remove('border-transparent','text-gray-500');
+}
+
+function timeInput(id, value) {
+    return `<input type="time" id="${id}" value="${value || ''}" class="border rounded px-2 py-1 text-sm w-24">`;
+}
+
+// --- Horario semanal ---
+async function loadSchedule() {
+    const res = await authFetch('/api/config/schedule');
+    const data = await res.json();
+    const map = {};
+    data.forEach(d => map[d.day_of_week] = d);
+
+    const tbody = document.getElementById('schedule-body');
+    tbody.innerHTML = DAYS.map((name, i) => {
+        const s = map[i] || {};
+        return `<tr class="border-t">
+            <td class="px-3 py-2 font-medium">${name}</td>
+            <td class="px-3 py-2 text-center">${timeInput('mo-'+i, s.morning_open)}</td>
+            <td class="px-3 py-2 text-center">${timeInput('mc-'+i, s.morning_close)}</td>
+            <td class="px-3 py-2 text-center">${timeInput('ao-'+i, s.afternoon_open)}</td>
+            <td class="px-3 py-2 text-center">${timeInput('ac-'+i, s.afternoon_close)}</td>
+            <td class="px-3 py-2 text-center"><input type="checkbox" id="cl-${i}" ${s.is_closed ? 'checked' : ''}></td>
+        </tr>`;
+    }).join('');
+}
+
+async function checkAndWarnConflicts(schedules, dateFrom, dateTo) {
+    const body = { schedules };
+    if (dateFrom) { body.date_from = dateFrom; body.date_to = dateTo; }
+    const res = await authFetch('/api/config/check-schedule-conflicts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.conflict) {
+        const apt = data.appointment;
+        const dt = new Date(apt.start_time);
+        const formatted = dt.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' a las ' + dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        showAlert('Aviso: citas fuera de horario', `Hay citas futuras que quedan fuera del nuevo horario configurado.<br><br>Primera cita afectada: <strong>${apt.patient_name}</strong> — ${formatted}.<br><br>Las citas <strong>no han sido modificadas</strong>. Revísalas manualmente si es necesario.`);
+    }
+}
+
+document.getElementById('schedule-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const schedules = DAYS.map((_, i) => ({
+        day_of_week: i,
+        morning_open: document.getElementById('mo-'+i).value || null,
+        morning_close: document.getElementById('mc-'+i).value || null,
+        afternoon_open: document.getElementById('ao-'+i).value || null,
+        afternoon_close: document.getElementById('ac-'+i).value || null,
+        is_closed: document.getElementById('cl-'+i).checked,
+    }));
+    const res = await authFetch('/api/config/schedule', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedules }),
+    });
+    if (res.ok) {
+        showToast('Horario guardado');
+        await checkAndWarnConflicts(schedules, null, null);
+    }
+});
+
+// --- Horarios especiales ---
+function renderSpecialBody(prefix) {
+    return DAYS.map((name, i) => `<tr class="border-t">
+        <td class="px-3 py-2 font-medium">${name}</td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}mo-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}mc-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}ao-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}ac-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
+        <td class="px-3 py-2 text-center"><input type="checkbox" id="${prefix}cl-${i}"></td>
+    </tr>`).join('');
+}
+
+async function loadSpecials() {
+    const res = await authFetch('/api/config/special-schedules');
+    const data = await res.json();
+    const container = document.getElementById('special-list');
+    if (data.length === 0) {
+        container.innerHTML = '<p class="text-sm text-gray-400">No hay horarios especiales configurados.</p>';
+        return;
+    }
+    container.innerHTML = data.map(sp => `
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="font-medium text-gray-800">${sp.name}</span>
+                    <span class="text-xs text-gray-500 ml-2">${formatDate(sp.date_from)} <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg> ${formatDate(sp.date_to)}</span>
+                </div>
+                <button onclick="deleteSpecial('${sp.name}')" class="text-red-600 text-xs hover:underline">Eliminar</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function deleteSpecial(name) {
+    showConfirm('Eliminar horario especial', '¿Estás seguro de que quieres eliminar este horario especial?', async () => {
+        await authFetch('/api/config/special-schedules/' + encodeURIComponent(name), { method: 'DELETE' });
+        loadSpecials();
+    });
+}
+
+document.getElementById('special-body').innerHTML = renderSpecialBody('sp-');
+
+document.getElementById('special-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const schedules = DAYS.map((_, i) => ({
+        day_of_week: i,
+        morning_open: document.getElementById('sp-mo-'+i).value || null,
+        morning_close: document.getElementById('sp-mc-'+i).value || null,
+        afternoon_open: document.getElementById('sp-ao-'+i).value || null,
+        afternoon_close: document.getElementById('sp-ac-'+i).value || null,
+        is_closed: document.getElementById('sp-cl-'+i).checked,
+    }));
+    const dateFrom = document.getElementById('sp-from').value;
+    const dateTo = document.getElementById('sp-to').value;
+    const res = await authFetch('/api/config/special-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: document.getElementById('sp-name').value,
+            date_from: dateFrom,
+            date_to: dateTo,
+            schedules,
+        }),
+    });
+    if (res.ok) {
+        e.target.reset();
+        loadSpecials();
+        showToast('Horario especial creado');
+        await checkAndWarnConflicts(schedules, dateFrom, dateTo);
+    }
+});
+
+// --- Festivos ---
+async function loadHolidays() {
+    const res = await authFetch('/api/config/holidays');
+    const data = await res.json();
+    const container = document.getElementById('holidays-list');
+    if (data.length === 0) {
+        container.innerHTML = '<p class="p-4 text-sm text-gray-400">No hay festivos configurados.</p>';
+        return;
+    }
+    container.innerHTML = data.map(h => `
+        <div class="flex justify-between items-center px-4 py-3">
+            <div>
+                <span class="font-medium text-gray-800">${formatDate(h.date)}</span>
+                ${h.name ? `<span class="text-gray-500 text-sm ml-2">${h.name}</span>` : ''}
+            </div>
+            <button onclick="deleteHoliday(${h.id})" class="text-red-600 text-xs hover:underline">Eliminar</button>
+        </div>
+    `).join('');
+}
+
+async function deleteHoliday(id) {
+    showConfirm('Eliminar festivo', '¿Estás seguro de que quieres eliminar este festivo?', async () => {
+        await authFetch('/api/config/holidays/' + id, { method: 'DELETE' });
+        loadHolidays();
+    });
+}
+
+document.getElementById('holiday-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await authFetch('/api/config/holidays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            date: document.getElementById('hol-date').value,
+            name: document.getElementById('hol-name').value || null,
+        }),
+    });
+    if (res.ok) { e.target.reset(); loadHolidays(); }
+    else { const err = await res.json(); showToast(err.detail, 'error'); }
+});
+
+// Init
+loadSchedule();
+loadSpecials();
+loadHolidays();
+loadPhysiosForConfig();
+loadGeneralSettings();
+
+// --- Horarios de fisios ---
+async function loadPhysiosForConfig() {
+    const res = await authFetch('/api/appointments/physios');
+    const physios = await res.json();
+    const select = document.getElementById('physio-select');
+    select.innerHTML = '<option value="">Seleccionar...</option>' + physios.map(p => `<option value="${p.id}">${p.full_name}</option>`).join('');
+}
+
+async function loadPhysioSchedule() {
+    const userId = document.getElementById('physio-select').value;
+    const tbody = document.getElementById('physio-schedule-body');
+    if (!userId) { tbody.innerHTML = ''; return; }
+
+    const res = await authFetch(`/api/config/physio-schedules/${userId}`);
+    const data = await res.json();
+    const map = {};
+    data.forEach(d => map[d.day_of_week] = d);
+
+    tbody.innerHTML = DAYS.map((name, i) => {
+        const s = map[i] || {};
+        return `<tr class="border-t">
+            <td class="px-3 py-2 font-medium">${name}</td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-mo-${i}" value="${s.morning_open || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-mc-${i}" value="${s.morning_close || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-ao-${i}" value="${s.afternoon_open || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-ac-${i}" value="${s.afternoon_close || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
+            <td class="px-3 py-2 text-center"><input type="checkbox" id="ps-off-${i}" ${s.is_off ? 'checked' : ''}></td>
+        </tr>`;
+    }).join('');
+}
+
+document.getElementById('physio-schedule-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('physio-select').value;
+    if (!userId) return;
+    const schedules = DAYS.map((_, i) => ({
+        day_of_week: i,
+        morning_open: document.getElementById('ps-mo-'+i).value || null,
+        morning_close: document.getElementById('ps-mc-'+i).value || null,
+        afternoon_open: document.getElementById('ps-ao-'+i).value || null,
+        afternoon_close: document.getElementById('ps-ac-'+i).value || null,
+        is_off: document.getElementById('ps-off-'+i).checked,
+    }));
+    const res = await authFetch('/api/config/physio-schedules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: parseInt(userId), schedules }),
+    });
+    if (res.ok) showToast('Horario del fisioterapeuta guardado');
+});
+
+// --- Ausencias ---
+async function loadPhysioAbsences() {
+    const userId = document.getElementById('physio-select').value;
+    const container = document.getElementById('absences-list');
+    if (!userId) { container.innerHTML = ''; return; }
+    const res = await authFetch(`/api/config/physio-absences/${userId}`);
+    const data = await res.json();
+    if (data.length === 0) {
+        container.innerHTML = '<p class="text-sm text-gray-400">Sin ausencias registradas.</p>';
+        return;
+    }
+    container.innerHTML = data.map(a => {
+        let period = formatDate(a.date_from);
+        if (a.date_to && a.date_to !== a.date_from) period += ` <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg> ${formatDate(a.date_to)}`;
+        if (a.time_from && a.time_to) period += ` (${a.time_from} - ${a.time_to})`;
+        return `<div class="flex justify-between items-center bg-white border-2 border-sante-primary/40 rounded-lg px-4 py-3">
+            <div>
+                <span class="font-medium text-gray-800 text-sm">${period}</span>
+                ${a.reason ? `<span class="text-gray-500 text-xs ml-2">${a.reason}</span>` : ''}
+            </div>
+            <button onclick="deleteAbsence(${a.id})" class="text-red-600 text-xs hover:underline">Eliminar</button>
+        </div>`;
+    }).join('');
+}
+
+document.getElementById('absence-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('physio-select').value;
+    if (!userId) { showToast('Selecciona un fisioterapeuta', 'error'); return; }
+    const dateFrom = document.getElementById('abs-date-from').value;
+    const dateTo = document.getElementById('abs-date-to').value || dateFrom;
+    const res = await authFetch('/api/config/physio-absences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user_id: parseInt(userId),
+            date_from: dateFrom,
+            date_to: dateTo,
+            time_from: document.getElementById('abs-time-from').value || null,
+            time_to: document.getElementById('abs-time-to').value || null,
+            reason: document.getElementById('abs-reason').value || null,
+        }),
+    });
+    if (res.ok) {
+        e.target.reset();
+        loadPhysioAbsences();
+        showToast('Ausencia registrada');
+    } else {
+        const err = await res.json();
+        showToast(err.detail || 'Error', 'error');
+    }
+});
+
+async function deleteAbsence(id) {
+    showConfirm('Eliminar ausencia', '¿Eliminar esta ausencia?', async () => {
+        await authFetch(`/api/config/physio-absences/${id}`, { method: 'DELETE' });
+        loadPhysioAbsences();
+    });
+}
+
+// --- General settings ---
+async function loadGeneralSettings() {
+    const res = await authFetch('/api/config/settings');
+    const data = await res.json();
+    document.getElementById('setting-duration').value = data.default_duration;
+    document.getElementById('setting-session-price').value = data.default_session_price || '';
+    document.getElementById('setting-pack-price').value = data.default_pack_price || '';
+    document.getElementById('setting-whatsapp').value = data.whatsapp_template || '';
+}
+
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await authFetch('/api/config/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            default_duration: parseInt(document.getElementById('setting-duration').value),
+            default_session_price: parseFloat(document.getElementById('setting-session-price').value) || 0,
+            default_pack_price: parseFloat(document.getElementById('setting-pack-price').value) || 0,
+            whatsapp_template: document.getElementById('setting-whatsapp').value || null,
+        }),
+    });
+    if (res.ok) showToast('Configuración guardada');
+});
+
+// --- Importar pacientes desde Excel ---
+document.getElementById('import-excel-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.getElementById('import-excel-file').files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+    const res = await authFetch('/api/patients/import-excel', { method: 'POST', body: formData });
+    btn.disabled = false;
+    btn.textContent = 'Importar';
+    e.target.reset();
+    if (res.ok) {
+        const data = await res.json();
+        let msg = `${data.created} paciente${data.created !== 1 ? 's' : ''} creado${data.created !== 1 ? 's' : ''}`;
+        if (data.skipped) msg += `, ${data.skipped} omitido${data.skipped !== 1 ? 's' : ''} (ya existían)`;
+        if (data.to_review && data.to_review.length) msg += `.<br><br><strong>Pacientes a revisar (${data.to_review.length}):</strong><br>` + data.to_review.join('<br>');
+        if (data.errors && data.errors.length) msg += `.<br><br><strong>Filas con error:</strong><br>` + data.errors.join('<br>');
+
+        // Descargar informe como fichero de texto si hay algo que reportar
+        const reportLines = [];
+        const now = new Date().toLocaleString('es-ES');
+        reportLines.push(`Informe de importación — ${now}`);
+        reportLines.push(`Archivo: ${file.name}`);
+        reportLines.push(``);
+        reportLines.push(`Pacientes creados: ${data.created}`);
+        reportLines.push(`Omitidos (ya existían): ${data.skipped}`);
+        if (data.to_review && data.to_review.length) {
+            reportLines.push(``);
+            reportLines.push(`PACIENTES A REVISAR (${data.to_review.length}):`);
+            data.to_review.forEach(l => reportLines.push(`  - ${l}`));
+        }
+        if (data.errors && data.errors.length) {
+            reportLines.push(``);
+            reportLines.push(`FILAS CON ERROR (${data.errors.length}):`);
+            data.errors.forEach(l => reportLines.push(`  - ${l}`));
+        }
+        const blob = new Blob([reportLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const dateStr = new Date().toISOString().slice(0,10);
+        a.download = `importacion_${dateStr}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showAlert('Importación completada', msg);
+    } else {
+        const err = await res.json();
+        showToast(err.detail || 'Error al importar', 'error');
+    }
+});
+
+// --- Exportar facturación gestoría ---
+// Prerellenar fechas con el mes actual
+(function() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    document.getElementById('export-date-from').value = `${y}-${m}-01`;
+    document.getElementById('export-date-to').value = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+})();
+
+document.getElementById('export-billing-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const dateFrom = document.getElementById('export-date-from').value;
+    const dateTo = document.getElementById('export-date-to').value;
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Generando...';
+    const res = await authFetch(`/api/billing/export-excel?date_from=${dateFrom}&date_to=${dateTo}`, { method: 'POST' });
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Descargar Excel';
+    if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const cd = res.headers.get('content-disposition') || '';
+        a.download = cd.split('filename=')[1] || `Facturacion_${dateFrom}_${dateTo}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Excel descargado');
+    } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Error al generar el Excel', 'error');
+    }
+});
+
+// --- Backup ---
+document.getElementById('export-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = document.getElementById('export-password').value;
+    const res = await authFetch('/api/backup/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+    });
+    if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = res.headers.get('content-disposition')?.split('filename=')[1] || 'sante_backup.db';
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById('export-password').value = '';
+        showToast('Backup descargado');
+    } else {
+        const err = await res.json();
+        showToast(err.detail || 'Error', 'error');
+    }
+});
+
+document.getElementById('import-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = document.getElementById('import-password').value;
+    const file = document.getElementById('import-file').files[0];
+    if (!file) return;
+
+    showConfirm('Restaurar backup', 'Se eliminarán TODOS los datos actuales y se reemplazarán por los del archivo. Esta acción no se puede deshacer. ¿Continuar?', async () => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('password', password);
+        const res = await authFetch('/api/backup/import', {
+            method: 'POST',
+            body: formData,
+        });
+        if (res.ok) {
+            showToast('Backup restaurado. La página se recargará.');
+            setTimeout(() => window.location.href = '/login', 2000);
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al restaurar', 'error');
+        }
+    });
+});
+
+function shutdownSystem() {
+    showConfirm('Apagar sistema', '¿Estás seguro de que quieres apagar la Raspberry Pi? Espera a que el LED verde deje de parpadear antes de desenchufar.', async () => {
+        const res = await authFetch('/api/config/shutdown', { method: 'POST' });
+        if (res.ok) showToast('Apagando sistema...');
+        else showToast('Error al apagar', 'error');
+    });
+}
+</script>
+{% endblock %}

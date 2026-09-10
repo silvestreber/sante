@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Lista de espera — Santé{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Lista de espera</h1>
+        <button onclick="openModal()" class="bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">+ Añadir paciente</button>
+    </div>
+
+    <div id="waitlist-container" class="space-y-3">
+        <p class="text-gray-500 text-sm">Cargando...</p>
+    </div>
+</div>
+
+<!-- Modal crear entrada -->
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Añadir a lista de espera</h2>
+        <form id="waitlist-form" class="space-y-3">
+            <div>
+                <label class="text-sm text-gray-600">Paciente</label>
+                <div class="relative">
+                    <input type="text" id="patient-search" placeholder="Buscar paciente..." class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" autocomplete="off">
+                    <input type="hidden" id="wl-patient">
+                    <div id="patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-40 overflow-y-auto"></div>
+                </div>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Fisioterapeutas</label>
+                <div id="physio-checkboxes" class="border-2 border-sante-primary/40 rounded p-2 max-h-32 overflow-y-auto space-y-1"></div>
+                <p class="text-xs text-gray-400 mt-1">No marcar ninguno = cualquier fisio</p>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Preferencia horaria</label>
+                <select id="wl-time-pref" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" onchange="toggleCustomTime()">
+                    <option value="ANY">Me da igual la hora</option>
+                    <option value="MORNING">Solo mañanas</option>
+                    <option value="AFTERNOON">Solo tardes</option>
+                    <option value="CUSTOM">Franja concreta</option>
+                </select>
+            </div>
+            <div id="custom-time-row" class="hidden grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-xs text-gray-500">Desde</label>
+                    <input type="time" id="wl-time-from" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">Hasta</label>
+                    <input type="time" id="wl-time-to" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Fecha</label>
+                <div class="flex items-center gap-2 mb-2">
+                    <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <input type="checkbox" id="wl-asap" onchange="toggleDateFields()">
+                        <span class="text-gray-700 font-medium">Lo antes posible</span>
+                    </label>
+                </div>
+                <div id="date-fields" class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-500">Desde</label>
+                        <input type="date" id="wl-date-from" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">Hasta</label>
+                        <input type="date" id="wl-date-to" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" id="wl-priority">
+                    <span class="text-gray-700 font-medium">Prioritario</span>
+                </label>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Notas</label>
+                <textarea id="wl-notes" rows="2" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Observaciones adicionales..."></textarea>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Añadir</button>
+                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal confirmar eliminar -->
+<div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Eliminar entrada</h2>
+        <p class="text-sm text-gray-600 mb-5">¿Estás seguro de que quieres eliminar esta entrada de la lista de espera?</p>
+        <div class="flex gap-2">
+            <button onclick="confirmDelete()" class="flex-1 bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700">Eliminar</button>
+            <button onclick="closeDeleteModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    const timePrefLabels = { ANY: 'Cualquier hora', MORNING: 'Mañanas', AFTERNOON: 'Tardes', CUSTOM: 'Franja concreta' };
+
+    async function loadPhysios() {
+        const res = await authFetch('/api/appointments/physios');
+        const physios = await res.json();
+        const container = document.getElementById('physio-checkboxes');
+        container.innerHTML = physios.map(p =>
+            `<label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" name="wl-physio" value="${p.id}" class="rounded">
+                <span class="text-gray-700">${p.full_name}</span>
+            </label>`
+        ).join('');
+    }
+
+    async function loadWaitlist() {
+        const res = await authFetch('/api/waitlist');
+        const entries = await res.json();
+        const container = document.getElementById('waitlist-container');
+
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No hay pacientes en lista de espera.</p>';
+            return;
+        }
+
+        container.innerHTML = entries.map(e => {
+            const dateStr = formatDate(e.created_at);
+            const timeStr = new Date(e.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            let prefs = [];
+
+            if (e.priority) prefs.push(`<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">Prioritario</span>`);
+            if (e.asap) prefs.push(`<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs">Lo antes posible</span>`);
+            if (e.physio_names && e.physio_names.length > 0) prefs.push(`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs">Fisio: ${e.physio_names.join(', ')}</span>`);
+            if (e.time_preference === 'CUSTOM' && e.time_from && e.time_to) {
+                prefs.push(`<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">${e.time_from} - ${e.time_to}</span>`);
+            } else if (e.time_preference !== 'ANY') {
+                prefs.push(`<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">${timePrefLabels[e.time_preference]}</span>`);
+            }
+            if (e.date_from || e.date_to) {
+                const from = e.date_from ? formatDate(e.date_from) : '';
+                const to = e.date_to ? formatDate(e.date_to) : '';
+                prefs.push(`<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs">${from}${from && to ? ' <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg> ' : ''}${to}</span>`);
+            }
+
+            const borderClass = e.priority ? 'border-red-400 border-3' : 'border-sante-primary/40 border-2';
+
+            return `
+                <div class="bg-white ${borderClass} rounded-lg shadow p-4">
+                    <div class="flex justify-between items-start gap-3">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800">${e.patient_name}</p>
+                            <p class="text-xs text-gray-500">${e.patient_phone} · Registrado el ${dateStr} a las ${timeStr}</p>
+                            <div class="flex flex-wrap gap-1 mt-2">${prefs.join('')}</div>
+                            ${e.notes ? `<p class="text-sm text-gray-600 mt-2 italic">${e.notes}</p>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="deleteEntry(${e.id})" class="text-red-500 hover:text-red-700" title="Eliminar">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Patient search autocomplete
+    let patientSearchTimeout;
+    const patientSearch = document.getElementById('patient-search');
+    const patientResults = document.getElementById('patient-results');
+    const wlPatient = document.getElementById('wl-patient');
+
+    patientSearch.addEventListener('input', (e) => {
+        clearTimeout(patientSearchTimeout);
+        wlPatient.value = '';
+        const q = e.target.value.trim();
+        if (q.length < 2) { patientResults.classList.add('hidden'); return; }
+        patientSearchTimeout = setTimeout(async () => {
+            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=8`);
+            const data = await res.json();
+            if (data.patients.length === 0) {
+                patientResults.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">Sin resultados</div>';
+            } else {
+                patientResults.innerHTML = data.patients.map(p =>
+                    `<div class="px-3 py-2 text-sm cursor-pointer hover:bg-sante-bg transition" data-id="${p.id}" data-name="${p.last_name}, ${p.first_name}">${p.last_name}, ${p.first_name}</div>`
+                ).join('');
+            }
+            patientResults.classList.remove('hidden');
+        }, 300);
+    });
+
+    patientResults.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-id]');
+        if (!item) return;
+        wlPatient.value = item.dataset.id;
+        patientSearch.value = item.dataset.name;
+        patientResults.classList.add('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!patientSearch.contains(e.target) && !patientResults.contains(e.target)) {
+            patientResults.classList.add('hidden');
+        }
+    });
+
+    function toggleCustomTime() {
+        const show = document.getElementById('wl-time-pref').value === 'CUSTOM';
+        document.getElementById('custom-time-row').classList.toggle('hidden', !show);
+    }
+
+    function toggleDateFields() {
+        const asap = document.getElementById('wl-asap').checked;
+        document.getElementById('date-fields').classList.toggle('hidden', asap);
+    }
+
+    function openModal() { document.getElementById('modal').classList.remove('hidden'); }
+    function closeModal() {
+        document.getElementById('modal').classList.add('hidden');
+        document.getElementById('waitlist-form').reset();
+        wlPatient.value = '';
+        patientSearch.value = '';
+        document.getElementById('custom-time-row').classList.add('hidden');
+        document.getElementById('date-fields').classList.remove('hidden');
+    }
+
+    document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const patientId = wlPatient.value;
+        if (!patientId) { showToast('Selecciona un paciente', 'error'); return; }
+
+        const selectedPhysios = [...document.querySelectorAll('input[name="wl-physio"]:checked')].map(c => parseInt(c.value));
+
+        const body = {
+            patient_id: parseInt(patientId),
+            physio_ids: selectedPhysios.length > 0 ? selectedPhysios : null,
+            time_preference: document.getElementById('wl-time-pref').value,
+            time_from: document.getElementById('wl-time-from').value || null,
+            time_to: document.getElementById('wl-time-to').value || null,
+            date_from: document.getElementById('wl-date-from').value || null,
+            date_to: document.getElementById('wl-date-to').value || null,
+            asap: document.getElementById('wl-asap').checked,
+            priority: document.getElementById('wl-priority').checked,
+            notes: document.getElementById('wl-notes').value || null,
+        };
+
+        const res = await authFetch('/api/waitlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (res.ok) {
+            closeModal();
+            loadWaitlist();
+            showToast('Paciente añadido a lista de espera');
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error', 'error');
+        }
+    });
+
+    async function resolveEntry(id) {
+        await authFetch(`/api/waitlist/${id}/resolve`, { method: 'PUT' });
+        loadWaitlist();
+        showToast('Entrada resuelta');
+    }
+
+    let deleteTargetId = null;
+    function deleteEntry(id) {
+        deleteTargetId = id;
+        document.getElementById('delete-modal').classList.remove('hidden');
+    }
+    function closeDeleteModal() {
+        deleteTargetId = null;
+        document.getElementById('delete-modal').classList.add('hidden');
+    }
+    async function confirmDelete() {
+        if (!deleteTargetId) return;
+        await authFetch(`/api/waitlist/${deleteTargetId}`, { method: 'DELETE' });
+        closeDeleteModal();
+        loadWaitlist();
+        showToast('Entrada eliminada');
+    }
+
+    loadPhysios();
+    loadWaitlist();
+</script>
+{% endblock %}

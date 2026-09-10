@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Santé{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'sante-bg': '#e4d3b9',
+                        'sante-primary': '#012d5e',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        #sidebar { transform: translateX(-100%); transition: transform 0.2s ease; }
+        #sidebar.open { transform: translateX(0); }
+        #sidebar-overlay { transition: opacity 0.2s ease; }
+        @keyframes slideIn { from { transform: translateY(-1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        body { caret-color: transparent; }
+        input, textarea, select, [contenteditable="true"] { caret-color: auto; }
+        .bg-watermark {
+            position: relative;
+        }
+        .bg-watermark::before {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50vw;
+            max-width: 500px;
+            height: 50vw;
+            max-height: 500px;
+            background: url('/static/img/logo_azul.png') center/contain no-repeat;
+            opacity: 0.06;
+            pointer-events: none;
+            z-index: 0;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-sante-bg min-h-screen bg-watermark">
+    <!-- Top bar -->
+    <nav id="main-nav" class="bg-sante-primary shadow hidden">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="text-white hover:text-sante-bg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+            </div>
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='/calendar'">
+                <img src="/static/img/logo_azul.png" alt="Santé" class="h-8 brightness-0 invert">
+                <span class="text-xl font-bold text-white">Clínica SANTÉ</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="/notifications" class="relative text-white hover:text-sante-bg" title="Avisos">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    <span id="notif-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center"></span>
+                </a>
+                <span id="nav-user" class="text-sm text-white"></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar overlay -->
+    <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/40 z-40" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar menu -->
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-white shadow-xl z-50 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+            <span class="font-bold text-sante-primary text-lg">Menú</span>
+            <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <nav id="sidebar-links" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto"></nav>
+        <div class="px-4 py-4 border-t border-gray-200">
+            <button onclick="logout()" class="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-red-50 text-red-700 font-medium text-sm hover:bg-red-100 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1"/></svg>
+                Cerrar sesión
+            </button>
+        </div>
+    </aside>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Toast container -->
+        <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2"></div>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Modal de confirmación global -->
+    <div id="global-confirm-modal" class="hidden fixed inset-0 z-[200] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 id="global-confirm-title" class="text-lg font-semibold text-gray-800 mb-3"></h2>
+            <p id="global-confirm-text" class="text-sm text-gray-600 mb-5"></p>
+            <div class="flex gap-2">
+                <button id="global-confirm-yes" class="flex-1 bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700">Confirmar</button>
+                <button onclick="closeGlobalConfirm()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de aviso global (solo informativo) -->
+    <div id="global-alert-modal" class="hidden fixed inset-0 z-[200] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-amber-400 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div class="flex items-center gap-2 mb-3">
+                <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                <h2 id="global-alert-title" class="text-lg font-semibold text-gray-800"></h2>
+            </div>
+            <div id="global-alert-text" class="text-sm text-gray-600 mb-5"></div>
+            <button onclick="document.getElementById('global-alert-modal').classList.add('hidden')" class="w-full bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Entendido</button>
+        </div>
+    </div>
+
+    <script>
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const colors = { success: 'bg-green-600 text-white', error: 'bg-red-600 text-white', warning: 'bg-amber-500 text-white' };
+            const toast = document.createElement('div');
+            toast.className = `px-6 py-4 rounded-lg shadow-xl text-base font-semibold ${colors[type] || colors.success}`;
+            toast.style.animation = 'slideIn 0.3s ease';
+            toast.textContent = message;
+            container.appendChild(toast);
+            playToastSound(type);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        function playToastSound(type) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                if (type === 'error') {
+                    osc.frequency.setValueAtTime(400, ctx.currentTime);
+                    osc.frequency.setValueAtTime(300, ctx.currentTime + 0.1);
+                } else {
+                    osc.frequency.setValueAtTime(600, ctx.currentTime);
+                    osc.frequency.setValueAtTime(800, ctx.currentTime + 0.1);
+                }
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        function playNotificationSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.4);
+            } catch(e) {}
+        }
+
+        function showConfirm(title, text, onConfirm) {
+            document.getElementById('global-confirm-title').textContent = title;
+            document.getElementById('global-confirm-text').textContent = text;
+            document.getElementById('global-confirm-yes').onclick = () => { closeGlobalConfirm(); onConfirm(); };
+            document.getElementById('global-confirm-modal').classList.remove('hidden');
+        }
+        function closeGlobalConfirm() {
+            document.getElementById('global-confirm-modal').classList.add('hidden');
+        }
+        function showAlert(title, html) {
+            document.getElementById('global-alert-title').textContent = title;
+            document.getElementById('global-alert-text').innerHTML = html;
+            document.getElementById('global-alert-modal').classList.remove('hidden');
+        }
+
+        function getToken() { return localStorage.getItem('token'); }
+        function getRole() { return localStorage.getItem('role'); }
+        function getFullName() { return localStorage.getItem('full_name'); }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            if (isNaN(d)) return dateStr;
+            return String(d.getDate()).padStart(2,'0') + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + d.getFullYear();
+        }
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            if (isNaN(d)) return dateStr;
+            return String(d.getDate()).padStart(2,'0') + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + d.getFullYear() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+                    window.location.href = '/login';
+                }
+                return false;
+            }
+            return true;
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebar-overlay').classList.toggle('hidden');
+        }
+
+        const menuIcons = {
+            'Calendario': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+            'Pacientes': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>',
+            'Facturación': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>',
+            'Contabilidad': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+            'Usuarios': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>',
+            'Avisos': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
+            'Auditoría': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>',
+            'Configuración': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>',
+            'Documentación': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>',
+            'Permisos': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>',
+        };
+
+        function setupNav() {
+            if (!checkAuth()) return;
+            document.getElementById('main-nav').classList.remove('hidden');
+            document.getElementById('nav-user').textContent = getFullName();
+
+            const role = getRole();
+            const links = [
+                { href: '/calendar', label: 'Calendario', roles: ['ADMIN','RECEPTION','PHYSIO'] },
+                { href: '/patients', label: 'Pacientes', roles: ['ADMIN','RECEPTION','PHYSIO'] },
+                { href: '/notifications', label: 'Avisos', roles: ['ADMIN','RECEPTION','PHYSIO'] },
+                { href: '/finance', label: 'Contabilidad', roles: ['ADMIN'] },
+                { href: '/users', label: 'Usuarios', roles: ['ADMIN'] },
+                { href: '/audit-log', label: 'Auditoría', roles: ['ADMIN'] },
+                { href: '/config', label: 'Configuración', roles: ['ADMIN', 'RECEPTION'] },
+                { href: '/docs/funcionalidades', label: 'Documentación', roles: ['ADMIN'] },
+                { href: '/docs/permisos', label: 'Permisos', roles: ['ADMIN'] },
+            ];
+
+            const nav = document.getElementById('sidebar-links');
+            nav.innerHTML = links
+                .filter(l => l.roles.includes(role))
+                .map(l => `<a href="${l.href}" class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-sante-bg hover:text-sante-primary transition">${menuIcons[l.label] || ''}${l.label}</a>`)
+                .join('');
+        }
+
+        function authFetch(url, options = {}) {
+            options.headers = { ...options.headers, 'Authorization': 'Bearer ' + getToken() };
+            return fetch(url, options).then(r => {
+                if (r.status === 401) { logout(); }
+                return r;
+            });
+        }
+
+        function updateNotificationBadge() {
+            authFetch('/api/notifications/unread-count').then(r => r.json()).then(data => {
+                const badge = document.getElementById('notif-badge');
+                if (data.count > 0) {
+                    badge.textContent = data.count > 9 ? '9+' : data.count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }).catch(() => {});
+        }
+
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            setupNav();
+            updateNotificationBadge();
+            setInterval(updateNotificationBadge, 60000);
+
+            // WebSocket para notificaciones en tiempo real
+            (function connectWS() {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const ws = new WebSocket(`${wsProtocol}//${window.location.host}/api/notifications/ws?token=${getToken()}`);
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'new_notification') {
+                        playNotificationSound();
+                        showToast(` ${data.sender_name}: ${data.message}`, 'success');
+                        updateNotificationBadge();
+                    }
+                };
+                ws.onclose = function(e) {
+                    // No reconectar si el token es inválido/expirado
+                    if (e.code === 4001 || e.code === 1008 || e.code === 403) return;
+                    if (getToken()) setTimeout(connectWS, 10000);
+                };
+            })();
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

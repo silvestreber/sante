@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Santé - Paciente{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 id="form-title" class="text-2xl font-bold text-gray-800 mb-6">Nuevo paciente</h1>
+
+    <form id="patient-form" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 space-y-4">
+
+        <!-- Datos personales -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                <input type="text" name="first_name" required class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Apellidos *</label>
+                <input type="text" name="last_name" required class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono *</label>
+                <input type="tel" name="phone" required class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" name="email" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <input type="text" name="address" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
+                <input type="date" name="birth_date" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">DNI/NIE</label>
+                <input type="text" name="dni" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+            </div>
+        </div>
+
+        <!-- Motivo de consulta -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Motivo de la consulta actual</label>
+            <textarea name="motivo_consulta" rows="3"
+                class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary"></textarea>
+        </div>
+
+        <!-- Anamnesis -->
+        <fieldset class="border-2 border-sante-primary/40 rounded-lg p-4 space-y-3">
+            <legend class="text-sm font-semibold text-sante-primary px-2">Anamnesis</legend>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Patologías músculo-esqueléticas</label>
+                    <input type="text" name="anamnesis_musculo" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Otras patologías</label>
+                    <input type="text" name="anamnesis_otras" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Cirugías</label>
+                    <input type="text" name="anamnesis_cirugias" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Accidentes / Fracturas</label>
+                    <input type="text" name="anamnesis_accidentes" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Medicación habitual</label>
+                    <input type="text" name="anamnesis_medicacion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Alergias</label>
+                    <input type="text" name="anamnesis_alergias" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Ortodoncia / Plantillas</label>
+                    <input type="text" name="anamnesis_ortodoncia" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Deporte</label>
+                    <input type="text" name="anamnesis_deporte" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Profesión</label>
+                    <input type="text" name="anamnesis_profesion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Tratamiento -->
+        <fieldset class="border-2 border-sante-primary/40 rounded-lg p-4 space-y-3">
+            <legend class="text-sm font-semibold text-sante-primary px-2">Tratamiento</legend>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Tratamiento</label>
+                <textarea name="tratamiento_tratamiento" rows="2"
+                    class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary"></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Contraindicaciones</label>
+                <textarea name="tratamiento_contraindicaciones_txt" rows="2"
+                    class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary"></textarea>
+            </div>
+        </fieldset>
+
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="bg-sante-primary text-white px-5 py-2 rounded hover:bg-sante-primary/90 text-sm">Guardar</button>
+            <a href="/patients" class="px-5 py-2 rounded border-2 border-sante-primary/40 text-gray-600 hover:bg-gray-50 text-sm">Cancelar</a>
+        </div>
+    </form>
+
+    <div id="form-message" class="mt-4 hidden text-sm px-4 py-2 rounded"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    const ANAMNESIS_KEYS = ['musculo','otras','cirugias','accidentes','medicacion','alergias','ortodoncia','deporte','profesion'];
+    const ANAMNESIS_LABELS = {
+        musculo: 'Patologías músculo-esqueléticas',
+        otras: 'Otras patologías',
+        cirugias: 'Cirugías',
+        accidentes: 'Accidentes / Fracturas',
+        medicacion: 'Medicación habitual',
+        alergias: 'Alergias',
+        ortodoncia: 'Ortodoncia / Plantillas',
+        deporte: 'Deporte',
+        profesion: 'Profesión',
+    };
+
+    function parseAnamnesis(text) {
+        const result = {};
+        if (!text) return result;
+        for (const key of ANAMNESIS_KEYS) {
+            const label = ANAMNESIS_LABELS[key];
+            const re = new RegExp(label + ':\\s*([^\\n]*)', 'i');
+            const m = text.match(re);
+            result[key] = m ? m[1].trim() : '';
+        }
+        return result;
+    }
+
+    function buildAnamnesis(form) {
+        return ANAMNESIS_KEYS
+            .map(k => `${ANAMNESIS_LABELS[k]}: ${form[`anamnesis_${k}`].value.trim()}`)
+            .join('\n');
+    }
+
+    function parseTratamiento(text) {
+        if (!text) return { tratamiento: '', contraindicaciones: '' };
+        const mT = text.match(/Tratamiento:\s*([^\n]*(?:\n(?!Contraindicaciones:)[^\n]*)*)/i);
+        const mC = text.match(/Contraindicaciones:\s*([\s\S]*)/i);
+        return {
+            tratamiento: mT ? mT[1].trim() : '',
+            contraindicaciones: mC ? mC[1].trim() : '',
+        };
+    }
+
+    function buildTratamiento(form) {
+        const t = form.tratamiento_tratamiento.value.trim();
+        const c = form.tratamiento_contraindicaciones_txt.value.trim();
+        return `Tratamiento: ${t}\nContraindicaciones: ${c}`;
+    }
+
+    const path = window.location.pathname;
+    const editMatch = path.match(/^\/patients\/(\d+)\/edit$/);
+    const patientId = editMatch ? editMatch[1] : null;
+    const form = document.getElementById('patient-form');
+
+    if (patientId) {
+        document.getElementById('form-title').textContent = 'Editar paciente';
+        authFetch(`/api/patients/${patientId}`)
+            .then(r => r.json())
+            .then(p => {
+                form.first_name.value = p.first_name || '';
+                form.last_name.value = p.last_name || '';
+                form.phone.value = p.phone || '';
+                form.email.value = p.email || '';
+                form.address.value = p.address || '';
+                form.birth_date.value = p.birth_date || '';
+                form.dni.value = p.dni || '';
+                form.motivo_consulta.value = p.motivo_consulta || '';
+
+                const anamnesis = parseAnamnesis(p.anamnesis);
+                for (const k of ANAMNESIS_KEYS) {
+                    form[`anamnesis_${k}`].value = anamnesis[k] || '';
+                }
+
+                const trat = parseTratamiento(p.tratamiento_contraindicaciones);
+                form.tratamiento_tratamiento.value = trat.tratamiento;
+                form.tratamiento_contraindicaciones_txt.value = trat.contraindicaciones;
+            });
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+
+        // Serializar anamnesis y tratamiento como texto estructurado
+        formData.set('anamnesis', buildAnamnesis(form));
+        formData.set('tratamiento_contraindicaciones', buildTratamiento(form));
+
+        // Eliminar campos auxiliares del formulario
+        for (const k of ANAMNESIS_KEYS) formData.delete(`anamnesis_${k}`);
+        formData.delete('tratamiento_tratamiento');
+        formData.delete('tratamiento_contraindicaciones_txt');
+
+        const url = patientId ? `/api/patients/${patientId}` : '/api/patients';
+        const method = patientId ? 'PUT' : 'POST';
+
+        const res = await authFetch(url, { method, body: formData });
+        const data = await res.json();
+        const msg = document.getElementById('form-message');
+
+        if (res.ok) {
+            msg.className = 'mt-4 text-sm px-4 py-2 rounded bg-green-100 text-green-700';
+            msg.textContent = data.message;
+            msg.classList.remove('hidden');
+            setTimeout(() => {
+                window.location.href = patientId ? `/patients/${patientId}` : '/patients';
+            }, 800);
+        } else {
+            msg.className = 'mt-4 text-sm px-4 py-2 rounded bg-red-100 text-red-700';
+            msg.textContent = data.detail || 'Error al guardar';
+            msg.classList.remove('hidden');
+        }
+    });
+</script>
+{% endblock %}

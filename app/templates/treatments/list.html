@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Santé - Tratamientos{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Tratamientos</h1>
+        <div class="flex gap-2">
+            <a id="back-btn" href="#" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
+            <a id="new-btn" href="#" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">+ Nuevo tratamiento</a>
+        </div>
+    </div>
+
+    <div id="treatments-list" class="space-y-4"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    const patientId = window.location.pathname.split('/')[2];
+    document.getElementById('back-btn').href = `/patients/${patientId}`;
+    document.getElementById('new-btn').href = `/patients/${patientId}/treatments/new`;
+
+    function loadTreatments() {
+        authFetch(`/api/treatments/patient/${patientId}`)
+            .then(r => r.json())
+            .then(treatments => {
+                const container = document.getElementById('treatments-list');
+                if (!treatments.length) {
+                    container.innerHTML = '<p class="text-gray-400 text-sm">No hay tratamientos registrados.</p>';
+                    return;
+                }
+                container.innerHTML = treatments.map(t => `
+                    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="font-semibold text-gray-800">${t.title}</h3>
+                                <p class="text-xs text-gray-400 mt-1">${t.physio_name} — ${formatDate(t.created_at)}</p>
+                            </div>
+                            <div class="flex gap-2 items-center">
+                                <button onclick="viewTreatmentPdf(${t.id})" class="text-blue-600 hover:text-blue-400" title="Ver PDF"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                                <button onclick="emailTreatment(${t.id})" class="text-purple-600 hover:text-purple-400" title="Enviar email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                <a href="/patients/${patientId}/treatments/${t.id}/edit" class="text-yellow-600 hover:text-yellow-400" title="Editar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></a>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-2 whitespace-pre-wrap">${t.description}</p>
+                    </div>
+                `).join('');
+            });
+    }
+
+    loadTreatments();
+
+    function viewTreatmentPdf(id) {
+        authFetch(`/api/documents/treatment/${id}/pdf`)
+            .then(r => {
+                if (!r.ok) { showToast('PDF no disponible', 'error'); return; }
+                return r.blob();
+            })
+            .then(blob => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+            });
+    }
+
+    async function emailTreatment(id) {
+        const res = await authFetch(`/api/documents/treatment/${id}/email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            showToast(data.message);
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al enviar email', 'error');
+        }
+    }
+</script>
+{% endblock %}

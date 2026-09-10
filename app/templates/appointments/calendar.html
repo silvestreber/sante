@@ -1,0 +1,1414 @@
+﻿{% extends "base.html" %}
+{% block title %}Santé - Calendario{% endblock %}
+
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.css" rel="stylesheet">
+<style>
+    .fc-event { cursor: pointer; font-size: 0.75rem; }
+    .modal-backdrop { background: rgba(0,0,0,0.4); }
+    #calendar-container .fc { }
+    #calendar-container .fc-timegrid-slot { cursor: pointer; height: 60px !important; }
+    #calendar-container .fc-bg-event { cursor: not-allowed !important; }
+    #calendar-container .fc-timegrid-slot.slot-closed {
+        cursor: not-allowed;
+    }
+    #calendar-container .fc-timegrid-slot.slot-midday {
+        height: 4px !important;
+        min-height: 4px !important;
+        max-height: 4px !important;
+        cursor: not-allowed;
+        background-color: #f3f4f6;
+    }
+    #calendar-container .fc-timegrid-slot.slot-midday .fc-timegrid-slot-label {
+        display: none;
+    }
+    #calendar-container .fc-timegrid-slot-label.slot-midday {
+        height: 4px !important;
+        min-height: 4px !important;
+        max-height: 4px !important;
+    }
+    #calendar-container .fc-timegrid-slot-label.slot-midday-first {
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
+        background-color: #f3f4f6;
+        color: #9ca3af;
+        font-size: 0.7rem;
+    }
+    .toast { animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s; }
+    @keyframes slideIn { from { transform: translateY(-1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    .custom-check input:checked + .check-box { background-color: #012d5e; border-color: #012d5e; }
+    .custom-check input:checked + .check-box svg { opacity: 1; }
+    .custom-check:hover, .custom-check:focus-within, .custom-check:active { background-color: white !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2"></div>
+
+<!-- Filters -->
+<div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+    <h1 class="text-2xl font-bold text-gray-800">Calendario</h1>
+    <button onclick="openCreateModal()" class="bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">+ Nueva cita</button>
+    <a href="#" onclick="openWaitlistModal()" class="flex items-center gap-1 bg-white border-2 border-sante-primary/40 text-sante-primary px-3 py-2 rounded text-sm font-medium hover:bg-sante-bg" title="Lista de espera">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Lista de espera
+    </a>
+    <div class="flex gap-2 flex-wrap ml-auto items-center">
+        <div class="flex bg-white border-2 border-sante-primary/40 rounded-lg overflow-hidden">
+            <label class="custom-check flex items-center gap-2 px-3 py-2 cursor-pointer select-none border-r border-sante-primary/20">
+                <input type="checkbox" id="filter-pending" checked class="sr-only">
+                <div class="check-box w-5 h-5 rounded border-2 border-sante-primary/40 flex items-center justify-center transition">
+                    <svg class="w-3 h-3 text-white opacity-0 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <span class="text-sm font-medium text-gray-700">Pendientes</span>
+            </label>
+            <label class="custom-check flex items-center gap-2 px-3 py-2 cursor-pointer select-none">
+                <input type="checkbox" id="filter-confirmed" checked class="sr-only">
+                <div class="check-box w-5 h-5 rounded border-2 border-sante-primary/40 flex items-center justify-center transition">
+                    <svg class="w-3 h-3 text-white opacity-0 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <span class="text-sm font-medium text-gray-700">Confirmadas</span>
+            </label>
+        </div>
+        <select id="filter-physio" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-sante-primary appearance-none cursor-pointer" style="background-image:url('data:image/svg+xml;utf8,<svg fill=\'%23012d5e\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'><path fill-rule=\'evenodd\' d=\'M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z\' clip-rule=\'evenodd\'/></svg>');background-repeat:no-repeat;background-position:right 0.5rem center;background-size:1.2em;padding-right:2rem">
+            <option value="">Todos los fisios</option>
+        </select>
+        <select id="filter-location" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-sante-primary appearance-none cursor-pointer" style="background-image:url('data:image/svg+xml;utf8,<svg fill=\'%23012d5e\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'><path fill-rule=\'evenodd\' d=\'M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z\' clip-rule=\'evenodd\'/></svg>');background-repeat:no-repeat;background-position:right 0.5rem center;background-size:1.2em;padding-right:2rem">
+            <option value="">Clínica y domicilio</option>
+            <option value="CLINIC">Solo clínica</option>
+            <option value="HOME">Solo domicilio</option>
+        </select>
+    </div>
+</div>
+
+<div id="calendar-container" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4"></div>
+
+<!-- Modal Avisos al login -->
+<div id="notif-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-sm mx-4">
+        <div class="p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <svg class="w-5 h-5 text-sante-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                Avisos
+            </h2>
+            <p id="notif-modal-text" class="text-sm text-gray-600 mb-4"></p>
+            <div class="flex gap-2">
+                <a id="notif-modal-go" href="/notifications" class="hidden flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm text-center font-medium hover:bg-sante-primary/90">Ver avisos</a>
+                <button onclick="document.getElementById('notif-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear/Editar Cita -->
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <h2 id="modal-title" class="text-lg font-semibold text-gray-800 mb-4">Nueva cita</h2>
+            <form id="apt-form" class="space-y-3">
+                <input type="hidden" id="apt-id">
+                <div>
+                    <label class="text-sm text-gray-600">Paciente</label>
+                    <div class="relative">
+                        <input type="text" id="patient-search" placeholder="Buscar paciente..." class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" autocomplete="off">
+                        <input type="hidden" id="apt-patient" required>
+                        <div id="patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-40 overflow-y-auto"></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">Fisioterapeuta</label>
+                    <select id="apt-physio" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required></select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-sm text-gray-600">Fecha y hora</label>
+                        <input type="datetime-local" id="apt-start" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-600">Duración</label>
+                        <select id="apt-duration" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                            <option value="30">30 min</option>
+                            <option value="45" selected>45 min</option>
+                            <option value="60">1 hora</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">Lugar</label>
+                    <select id="apt-location" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                        <option value="CLINIC">Clínica</option>
+                        <option value="HOME">Domicilio</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">Estado</label>
+                    <select id="apt-status" class="hidden">
+                        <option value="PENDING">Pendiente</option>
+                        <option value="CONFIRMED">Confirmada</option>
+                        <option value="CANCELLED">Cancelada</option>
+                        <option value="FINALIZED">Finalizada</option>
+                    </select>
+                    <p id="apt-status-display" class="text-sm font-medium mt-1"></p>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600">Notas</label>
+                    <textarea id="apt-notes" rows="2" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm"></textarea>
+                </div>
+                <!-- Recurrence (only for new) -->
+                <div id="recurrence-section">
+                    <label class="flex items-center gap-2 text-sm text-gray-600">
+                        <input type="checkbox" id="apt-recurrent"> Cita recurrente
+                    </label>
+                    <div id="recurrence-options" class="hidden mt-2 space-y-2 pl-4 border-l-2 border-sante-primary/30">
+                        <div>
+                            <label class="text-xs text-gray-500">Días de la semana</label>
+                            <div class="flex gap-1 flex-wrap">
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="0"> L</label>
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="1"> M</label>
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="2"> X</label>
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="3"> J</label>
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="4"> V</label>
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="5"> S</label>
+                                <label class="text-xs"><input type="checkbox" name="rec-day" value="6"> D</label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500">Semanas</label>
+                            <input type="number" id="rec-weeks" value="4" min="1" max="12" class="w-20 border-2 border-sante-primary/40 rounded px-2 py-1 text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bono del paciente (solo en edición) -->
+                <div id="pack-section" class="hidden border-2 border-sante-primary/40 rounded p-3 bg-sante-bg/30">
+                    <div id="pack-info" class="text-sm text-gray-700"></div>
+                    <label id="pack-consume-label" class="hidden flex items-center gap-2 mt-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="apt-consume-pack" class="rounded">
+                        <span class="text-gray-700 font-medium">Consumir sesión del bono</span>
+                    </label>
+                </div>
+
+                <div id="modal-error" class="hidden text-sm text-red-600 bg-red-50 p-2 rounded"></div>
+                <button type="button" id="btn-force-save" class="hidden w-full bg-amber-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-600">Guardar de todas formas</button>
+
+                <div id="action-buttons-row" class="hidden space-y-2 pt-2">
+                    <button type="button" id="btn-whatsapp" class="w-full flex items-center justify-center gap-2 text-white px-4 py-2 rounded text-sm font-medium hover:opacity-90" style="background-color:#25D366">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        Enviar recordatorio
+                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" id="btn-confirm-apt" class="hidden flex-1 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700">Confirmar cita</button>
+                        <button type="button" id="btn-finish-apt" class="hidden flex-1 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700">Finalizar</button>
+                        <button type="button" id="btn-cancel-apt" class="hidden flex-1 bg-red-100 text-red-700 px-4 py-2 rounded text-sm hover:bg-red-200">Cancelar cita</button>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" id="btn-save" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Guardar cambios</button>
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cerrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal confirmar cita en fecha pasada -->
+<div id="past-date-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Fecha pasada</h2>
+        <p class="text-sm text-gray-600 mb-5">La fecha y hora seleccionadas son anteriores al momento actual.</p>
+        <div class="flex flex-col gap-2">
+            <button onclick="forceSavePastDate()" class="w-full bg-amber-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-600">Guardar de todas formas</button>
+            <button onclick="closePastDateModal()" class="w-full bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Editar fecha</button>
+            <button onclick="closePastDateModal(); closeModal()" class="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal confirmar cancelación de cita -->
+<div id="cancel-confirm-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Cancelar cita</h2>
+        <p class="text-sm text-gray-600 mb-5">¿Estás seguro de que quieres cancelar esta cita?</p>
+        <div class="flex gap-2">
+            <button onclick="confirmCancelApt()" class="flex-1 bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700">Sí, cancelar</button>
+            <button onclick="document.getElementById('cancel-confirm-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">No, volver</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal finalizar cita -->
+<div id="finish-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Finalizar cita</h2>
+        <form id="finish-form" class="space-y-3">
+            <div>
+                <label class="text-sm text-gray-600">Seguimiento</label>
+                <textarea id="fin-observations" rows="3" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Notas sobre la sesion (opcional)"></textarea>
+            </div>
+            <hr class="my-3">
+            <h3 class="text-sm font-semibold text-gray-700">Datos de pago</h3>
+            <div>
+                <label class="text-sm text-gray-600">Tipo de documento</label>
+                <select id="fin-doc-type" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                    <option value="RECEIPT">Justificante</option>
+                    <option value="INVOICE">Factura</option>
+                    <option value="SIMPLIFIED_INVOICE">Factura simplificada</option>
+                </select>
+            </div>
+            <div id="fin-amount-section">
+                <label class="text-sm text-gray-600">Importe</label>
+                <input type="number" id="fin-amount" step="0.01" min="0" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Metodo de pago</label>
+                <select id="fin-payment" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" onchange="toggleFinAmount()">
+                    <option value="">Pendiente de pago</option>
+                    <option value="CASH">Efectivo</option>
+                    <option value="BIZUM">Bizum</option>
+                    <option value="PACK">Bono</option>
+                </select>
+            </div>
+            <div id="fin-pack-section" class="hidden">
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" id="fin-use-pack">
+                    <span id="fin-pack-label" class="text-gray-700"></span>
+                </label>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700">Finalizar</button>
+                <button type="button" onclick="closeFinishModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Lista de espera -->
+<div id="waitlist-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800">Lista de espera</h2>
+            <div class="flex gap-2">
+                <button onclick="openWaitlistForm()" class="bg-sante-primary text-white px-3 py-1 rounded text-sm hover:bg-sante-primary/90">+ Añadir</button>
+                <button onclick="closeWaitlistModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+            </div>
+        </div>
+        <div id="waitlist-list" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+    </div>
+</div>
+
+<!-- Modal Añadir a lista de espera -->
+<div id="waitlist-form-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Añadir a lista de espera</h2>
+        <form id="waitlist-form" class="space-y-3">
+            <div>
+                <label class="text-sm text-gray-600">Paciente</label>
+                <div class="relative">
+                    <input type="text" id="wl-patient-search" placeholder="Buscar paciente..." class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" autocomplete="off">
+                    <input type="hidden" id="wl-patient">
+                    <div id="wl-patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-40 overflow-y-auto"></div>
+                </div>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Fisioterapeutas</label>
+                <div id="wl-physio-checkboxes" class="border-2 border-sante-primary/40 rounded p-2 max-h-32 overflow-y-auto space-y-1"></div>
+                <p class="text-xs text-gray-400 mt-1">No marcar ninguno = cualquier fisio</p>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Preferencia horaria</label>
+                <select id="wl-time-pref" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" onchange="toggleWlCustomTime()">
+                    <option value="ANY">Me da igual la hora</option>
+                    <option value="MORNING">Solo mañanas</option>
+                    <option value="AFTERNOON">Solo tardes</option>
+                    <option value="CUSTOM">Franja concreta</option>
+                </select>
+            </div>
+            <div id="wl-custom-time-row" class="hidden grid grid-cols-2 gap-2">
+                <div><label class="text-xs text-gray-500">Desde</label><input type="time" id="wl-time-from" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm"></div>
+                <div><label class="text-xs text-gray-500">Hasta</label><input type="time" id="wl-time-to" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm"></div>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Fecha</label>
+                <div class="flex items-center gap-2 mb-2">
+                    <label class="flex items-center gap-1.5 text-sm cursor-pointer"><input type="checkbox" id="wl-asap" onchange="toggleWlDateFields()"><span class="text-gray-700 font-medium">Lo antes posible</span></label>
+                    <label class="flex items-center gap-1.5 text-sm cursor-pointer ml-4"><input type="checkbox" id="wl-single-day" onchange="toggleWlSingleDay()"><span class="text-gray-700 font-medium">Día concreto</span></label>
+                </div>
+                <div id="wl-date-fields" class="grid grid-cols-2 gap-2">
+                    <div><label class="text-xs text-gray-500">Desde</label><input type="date" id="wl-date-from" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm"></div>
+                    <div id="wl-date-to-col"><label class="text-xs text-gray-500">Hasta</label><input type="date" id="wl-date-to" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm"></div>
+                </div>
+            </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="wl-priority"><span class="text-gray-700 font-medium">Prioritario</span></label>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Notas</label>
+                <textarea id="wl-notes" rows="2" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Observaciones..."></textarea>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Añadir</button>
+                <button type="button" onclick="closeWaitlistForm()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal coincidencias lista de espera -->
+<div id="waitlist-match-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Hueco disponible</h2>
+        <p class="text-sm text-gray-600 mb-4">Hay pacientes en lista de espera que encajan con esta cita cancelada.</p>
+        <div id="waitlist-match-list" class="space-y-2 mb-4 max-h-48 overflow-y-auto"></div>
+        <div class="flex gap-2">
+            <button onclick="openWaitlistModal(); closeWaitlistMatchModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Ver lista completa</button>
+            <button onclick="closeWaitlistMatchModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal eliminar de lista de espera -->
+<div id="waitlist-remove-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Paciente en lista de espera</h2>
+        <p class="text-sm text-gray-600 mb-4">Este paciente tiene entradas en la lista de espera. ¿Deseas eliminarlo de la lista?</p>
+        <div class="flex gap-2">
+            <button id="btn-remove-waitlist" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Sí, eliminar</button>
+            <button onclick="document.getElementById('waitlist-remove-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">No, mantener</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal registrar pago bono -->
+<div id="calendar-pay-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
+        <form id="calendar-pay-form" class="space-y-3">
+            <input type="hidden" id="cal-pay-invoice-id">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Método de pago</label>
+                <select id="cal-pay-method" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                    <option value="CASH">Efectivo</option>
+                    <option value="BIZUM">Bizum</option>
+                </select>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Confirmar pago</button>
+                <button type="button" onclick="document.getElementById('calendar-pay-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.9/locales/es.global.min.js"></script>
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    // --- Toast notifications ---
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const colors = {
+            success: 'bg-sante-primary text-white',
+            error: 'bg-red-600 text-white',
+            warning: 'bg-amber-500 text-white',
+        };
+        const toast = document.createElement('div');
+        toast.className = `toast px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${colors[type] || colors.success}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    let calendar;
+    let physios = [];
+    let physioColors = {};
+    let physioSchedules = {};
+    let physioAbsences = {};
+    let constraints = null;
+    let defaultDuration = 45;
+
+    const statusColors = {
+        PENDING: '#f59e0b',
+        CONFIRMED: '#10b981',
+        CANCELLED: '#ef4444',
+        FINALIZED: '#6b7280',
+    };
+
+    async function loadPhysios() {
+        const res = await authFetch('/api/appointments/physios');
+        physios = await res.json();
+        const filterSelect = document.getElementById('filter-physio');
+        const formSelect = document.getElementById('apt-physio');
+        physios.forEach(p => {
+            filterSelect.innerHTML += `<option value="${p.id}">${p.full_name}</option>`;
+            formSelect.innerHTML += `<option value="${p.id}">${p.full_name}</option>`;
+            if (p.color) physioColors[p.id] = p.color;
+        });
+        // Si el usuario es fisio, preseleccionar su calendario
+        if (getRole() === 'PHYSIO') {
+            const userId = localStorage.getItem('user_id');
+            if (userId && filterSelect.querySelector(`option[value="${userId}"]`)) {
+                filterSelect.value = userId;
+            }
+        }
+    }
+
+    async function loadSettings() {
+        const res = await authFetch('/api/config/settings');
+        const data = await res.json();
+        defaultDuration = data.default_duration || 45;
+        window.defaultSessionPrice = data.default_session_price || 0;
+        window.defaultPackPrice = data.default_pack_price || 0;
+        window.whatsappTemplate = data.whatsapp_template || '';
+    }
+
+    async function loadPhysioSchedules() {
+        const res = await authFetch('/api/config/physio-schedules');
+        physioSchedules = await res.json();
+        const res2 = await authFetch('/api/config/physio-absences');
+        physioAbsences = await res2.json();
+    }
+
+    async function loadConstraints(start, end) {
+        const res = await authFetch(`/api/config/calendar-constraints?start=${start}&end=${end}`);
+        constraints = await res.json();
+        return constraints;
+    }
+
+    function isSlotBlocked(dateStr) {
+        if (!constraints) return false;
+        const dt = new Date(dateStr);
+        const dayKey = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+        const dayInfo = constraints.days[dayKey];
+        if (!dayInfo) return false;
+        if (dayInfo.closed) return true;
+
+        const time = String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+        if (!dayInfo.blocks || dayInfo.blocks.length === 0) return false;
+
+        for (const block of dayInfo.blocks) {
+            // Permitir si la hora coincide con la apertura del bloque o cae dentro
+            if (time >= block.open && time < block.close) return false;
+        }
+
+        // Si el slot cae justo antes de un bloque abierto (dentro del mismo slot de 1h),
+        // comprobar si la apertura del siguiente bloque cae dentro de esta hora
+        const dtEnd = new Date(dt.getTime() + 3600000); // +1h
+        const timeEnd = String(dtEnd.getHours()).padStart(2,'0') + ':' + String(dtEnd.getMinutes()).padStart(2,'0');
+        for (const block of dayInfo.blocks) {
+            if (block.open > time && block.open < timeEnd) return false;
+        }
+
+        return true;
+    }
+
+    function adjustToBlockOpen(dateStr) {
+        if (!constraints) return dateStr;
+        const dt = new Date(dateStr);
+        const dayKey = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+        const dayInfo = constraints.days[dayKey];
+        if (!dayInfo || !dayInfo.blocks) return dateStr;
+
+        const time = String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+        for (const block of dayInfo.blocks) {
+            if (time >= block.open && time < block.close) return dateStr;
+        }
+        for (const block of dayInfo.blocks) {
+            if (block.open > time) {
+                return dayKey + 'T' + block.open;
+            }
+        }
+        return dateStr;
+    }
+
+    function getBackgroundEvents() {
+        if (!constraints) return [];
+        const bgEvents = [];
+
+        // Holidays
+        for (const h of constraints.holidays) {
+            bgEvents.push({
+                start: h.date,
+                end: h.date,
+                display: 'background',
+                backgroundColor: '#e5e7eb',
+                allDay: true,
+            });
+        }
+
+        // Closed breaks and after-closing slots
+        for (const [dayKey, dayInfo] of Object.entries(constraints.days)) {
+            if (dayInfo.closed) continue;
+            if (!dayInfo.blocks || dayInfo.blocks.length === 0) continue;
+
+            // Midday gaps
+            for (let i = 0; i < dayInfo.blocks.length - 1; i++) {
+                const gapStart = dayInfo.blocks[i].close;
+                const gapEnd = dayInfo.blocks[i + 1].open;
+                if (gapStart < gapEnd) {
+                    bgEvents.push({
+                        start: dayKey + 'T' + gapStart + ':00',
+                        end: dayKey + 'T' + gapEnd + ':00',
+                        display: 'background',
+                        backgroundColor: '#e5e7eb',
+                    });
+                }
+            }
+        }
+
+        return bgEvents;
+    }
+
+    async function initCalendar() {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 1);
+        const end = new Date(start.getTime() + 7 * 86400000);
+        await loadConstraints(start.toISOString(), end.toISOString());
+
+        // Slot duration is always 1 hour
+        const slotDuration = '01:00:00';
+
+        // Si es sábado(6) o domingo(0), avanzar al lunes siguiente
+        const today = new Date();
+        const dow = today.getDay();
+        let initialDate = today;
+        if (dow === 6) initialDate = new Date(today.getTime() + 2 * 86400000);
+        else if (dow === 0) initialDate = new Date(today.getTime() + 86400000);
+
+        const el = document.getElementById('calendar-container');
+        calendar = new FullCalendar.Calendar(el, {
+            locale: 'es',
+            buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día' },
+            initialView: window.innerWidth < 768 ? 'timeGridDay' : 'timeGridWeek',
+            initialDate: initialDate,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            slotMinTime: constraints ? constraints.slotMinTime : '08:00:00',
+            slotMaxTime: constraints ? constraints.slotMaxTime : '21:00:00',
+            slotDuration: slotDuration,
+            slotLabelInterval: slotDuration,
+            hiddenDays: constraints ? constraints.hiddenDays : [],
+            allDaySlot: false,
+            expandRows: false,
+            height: 'auto',
+            selectable: false,
+            slotEventOverlap: false,
+            nowIndicator: true,
+            events: fetchEvents,
+            dateClick: (info) => {
+                if (isSlotBlocked(info.dateStr)) return;
+                // Si la hora cae en pausa pero el bloque abre dentro del slot, ajustar a la apertura
+                const adjustedStart = adjustToBlockOpen(info.dateStr);
+                openCreateModal(adjustedStart);
+            },
+            eventClick: (info) => {
+                if (info.event.display === 'background') return;
+                openEditModal(info.event.extendedProps.appointmentData);
+            },
+            eventDidMount: (info) => {
+                if (info.event.display === 'background') return;
+                const data = info.event.extendedProps.appointmentData;
+                if (data && data.location === 'HOME') {
+                    info.el.style.borderLeft = '3px solid #8b5cf6';
+                }
+                if (info.event.extendedProps.opacity && info.event.extendedProps.opacity < 1) {
+                    info.el.style.opacity = info.event.extendedProps.opacity;
+                }
+            },
+            datesSet: async (info) => {
+                await loadConstraints(info.startStr, info.endStr);
+                calendar.getEventSources().forEach(s => {
+                    if (s.id === 'bg-source') s.remove();
+                });
+                calendar.addEventSource({ id: 'bg-source', events: getBackgroundEvents() });
+                setTimeout(collapseMiddaySlots, 100);
+            },
+        });
+        calendar.render();
+    }
+
+    function collapseMiddaySlots() {
+        if (!constraints) return;
+        // Find midday gap from any open day
+        let gapStart = null, gapEnd = null;
+        for (const dayInfo of Object.values(constraints.days)) {
+            if (dayInfo.closed || !dayInfo.blocks || dayInfo.blocks.length < 2) continue;
+            gapStart = dayInfo.blocks[0].close;
+            gapEnd = dayInfo.blocks[1].open;
+            break;
+        }
+
+        if (!gapStart || !gapEnd) return;
+
+        // Collapse midday into a single compact row
+        const rows = document.querySelectorAll('#calendar-container tr[data-time]');
+        let isFirst = true;
+        rows.forEach(row => {
+            const time = row.getAttribute('data-time').slice(0, 5);
+            if (time >= gapStart && time < gapEnd) {
+                if (isFirst) {
+                    row.style.height = '24px';
+                    row.style.backgroundColor = '#f3f4f6';
+                    const labelCell = row.querySelector('td.fc-timegrid-slot-label');
+                    if (labelCell) {
+                        const frame = labelCell.querySelector('.fc-timegrid-slot-label-frame');
+                        if (frame) frame.innerHTML = `<span style="font-size:0.65rem;color:#9ca3af">${gapStart}-${gapEnd}</span>`;
+                    }
+                    row.querySelectorAll('td.fc-timegrid-slot-lane').forEach(td => {
+                        td.style.backgroundColor = '#f3f4f6';
+                        td.style.cursor = 'not-allowed';
+                    });
+                    isFirst = false;
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    async function fetchEvents(info, successCallback) {
+        const physioId = document.getElementById('filter-physio').value;
+        const location = document.getElementById('filter-location').value;
+        const showPending = document.getElementById('filter-pending').checked;
+        const showConfirmed = document.getElementById('filter-confirmed').checked;
+        let url = `/api/appointments?start=${info.startStr}&end=${info.endStr}`;
+        if (physioId) url += `&physio_id=${physioId}`;
+        if (location) url += `&location=${location}`;
+
+        const res = await authFetch(url);
+        const data = await res.json();
+        const events = data
+            .filter(apt => {
+                if (apt.status === 'CANCELLED') return false;
+                if (apt.status === 'PENDING' && !showPending) return false;
+                if (apt.status === 'CONFIRMED' && !showConfirmed) return false;
+                return true;
+            })
+            .map(apt => {
+                const color = physioColors[apt.physio_id] || '#6b7280';
+                const opacity = apt.status === 'PENDING' ? 0.6 : 1;
+                return {
+                    id: apt.id,
+                    title: `${apt.patient_name}`,
+                    start: apt.start_time,
+                    end: new Date(new Date(apt.start_time).getTime() + apt.duration_minutes * 60000).toISOString(),
+                    backgroundColor: color,
+                    borderColor: apt.status === 'CANCELLED' ? '#ef4444' : color,
+                    textColor: '#fff',
+                    extendedProps: { appointmentData: apt, opacity },
+                };
+            });
+        successCallback(events);
+    }
+
+    // Filters
+    document.getElementById('filter-physio').addEventListener('change', () => calendar.refetchEvents());
+    document.getElementById('filter-location').addEventListener('change', () => calendar.refetchEvents());
+    document.getElementById('filter-pending').addEventListener('change', () => calendar.refetchEvents());
+    document.getElementById('filter-confirmed').addEventListener('change', () => calendar.refetchEvents());
+
+    // Modal logic
+    function openModal() { document.getElementById('modal').classList.remove('hidden'); }
+    function closeModal() { document.getElementById('modal').classList.add('hidden'); resetForm(); }
+
+    function resetForm() {
+        document.getElementById('apt-form').reset();
+        document.getElementById('apt-id').value = '';
+        document.getElementById('apt-patient').value = '';
+        document.getElementById('modal-error').classList.add('hidden');
+        document.getElementById('btn-force-save').classList.add('hidden');
+        document.getElementById('recurrence-section').classList.remove('hidden');
+        document.getElementById('recurrence-options').classList.add('hidden');
+        document.getElementById('btn-cancel-apt').classList.add('hidden');
+        document.getElementById('btn-confirm-apt').classList.add('hidden');
+        document.getElementById('apt-status').parentElement.classList.add('hidden');
+        document.getElementById('apt-status-display').textContent = '';
+        document.getElementById('patient-search').classList.remove('hidden');
+        document.getElementById('patient-search').value = '';
+        document.getElementById('patient-search').readOnly = false;
+        document.getElementById('patient-results').classList.add('hidden');
+        document.getElementById('pack-section').classList.add('hidden');
+        document.getElementById('pack-consume-label').classList.add('hidden');
+        document.getElementById('apt-consume-pack').checked = false;
+        document.getElementById('btn-finish-apt').classList.add('hidden');
+        document.getElementById('action-buttons-row').classList.add('hidden');
+        document.getElementById('btn-save').classList.remove('hidden');
+        document.querySelectorAll('#apt-form input, #apt-form select, #apt-form textarea').forEach(el => {
+            el.disabled = false;
+        });
+    }
+
+    function openCreateModal(startStr) {
+        resetForm();
+        document.getElementById('modal-title').textContent = 'Nueva cita';
+        document.getElementById('apt-status').parentElement.classList.add('hidden');
+        document.getElementById('apt-duration').value = defaultDuration;
+        if (startStr) {
+            document.getElementById('apt-start').value = startStr.slice(0, 16);
+        }
+        if (localStorage.getItem('is_physio') === 'true') {
+            document.getElementById('apt-physio').value = localStorage.getItem('user_id');
+        }
+        openModal();
+    }
+
+    function openEditModal(apt) {
+        resetForm();
+        document.getElementById('modal-title').textContent = 'Editar cita';
+        document.getElementById('apt-id').value = apt.id;
+        document.getElementById('recurrence-section').classList.add('hidden');
+        document.getElementById('action-buttons-row').classList.remove('hidden');
+        document.getElementById('btn-cancel-apt').classList.remove('hidden');
+        document.getElementById('apt-status').parentElement.classList.remove('hidden');
+
+        // Mostrar estado como texto
+        const statusLabels = { PENDING: 'Pendiente', CONFIRMED: 'Confirmada', CANCELLED: 'Cancelada', FINALIZED: 'Finalizada' };
+        const statusColors = { PENDING: 'text-amber-600', CONFIRMED: 'text-green-600', CANCELLED: 'text-red-600', FINALIZED: 'text-gray-600' };
+        document.getElementById('apt-status-display').innerHTML = `<span class="${statusColors[apt.status] || ''}">${statusLabels[apt.status] || apt.status}</span>`;
+        document.getElementById('apt-status').value = apt.status;
+
+        document.getElementById('patient-search').value = apt.patient_name;
+        document.getElementById('patient-search').readOnly = true;
+        document.getElementById('apt-patient').value = apt.patient_id;
+
+        document.getElementById('apt-physio').value = apt.physio_id;
+        document.getElementById('apt-start').value = apt.start_time.slice(0, 16);
+        document.getElementById('apt-duration').value = apt.duration_minutes;
+        document.getElementById('apt-location').value = apt.location;
+        document.getElementById('apt-notes').value = apt.notes || '';
+
+        // Botones según estado
+        if (apt.status === 'PENDING') {
+            document.getElementById('btn-confirm-apt').classList.remove('hidden');
+        }
+        if (apt.status === 'CONFIRMED' && !apt.has_session) {
+            document.getElementById('btn-finish-apt').classList.remove('hidden');
+        }
+        if (apt.status === 'FINALIZED') {
+            disableForm();
+        }
+        loadPatientPack(apt.patient_id);
+        openModal();
+    }
+
+    function disableForm() {
+        document.getElementById('action-buttons-row').classList.add('hidden');
+        document.getElementById('btn-save').classList.add('hidden');
+        document.querySelectorAll('#apt-form input, #apt-form select, #apt-form textarea').forEach(el => {
+            el.disabled = true;
+        });
+    }
+
+    async function loadPatientPack(patientId) {
+        const res = await authFetch(`/api/billing/packs/patient/${patientId}`);
+        const packs = await res.json();
+        const section = document.getElementById('pack-section');
+        const info = document.getElementById('pack-info');
+        const consumeLabel = document.getElementById('pack-consume-label');
+
+        const activePack = packs.find(p => p.active);
+        if (activePack) {
+            section.classList.remove('hidden');
+            const pendingIcon = activePack.pending_invoice_id
+                ? `<button onclick="event.stopPropagation(); openCalendarPayModal(${activePack.pending_invoice_id})" class="ml-2 text-red-600 hover:text-red-800" title="Pago pendiente"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></button>`
+                : '';
+            info.innerHTML = `<strong>Bono activo:</strong> ${activePack.remaining} ${activePack.remaining === 1 ? 'sesión restante' : 'sesiones restantes'} de ${activePack.total_sessions}${pendingIcon}`;
+            consumeLabel.classList.remove('hidden');
+            document.getElementById('apt-consume-pack').dataset.packId = activePack.id;
+        } else {
+            section.classList.remove('hidden');
+            info.innerHTML = '<span class="text-gray-500">Este paciente no tiene bono activo.</span>';
+            consumeLabel.classList.add('hidden');
+        }
+    }
+
+    // Patient search autocomplete
+    let patientSearchTimeout;
+    const patientSearch = document.getElementById('patient-search');
+    const patientResults = document.getElementById('patient-results');
+    const aptPatient = document.getElementById('apt-patient');
+
+    patientSearch.addEventListener('input', (e) => {
+        clearTimeout(patientSearchTimeout);
+        aptPatient.value = '';
+        const q = e.target.value.trim();
+        if (q.length < 2) { patientResults.classList.add('hidden'); return; }
+        patientSearchTimeout = setTimeout(async () => {
+            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=8`);
+            const data = await res.json();
+            if (data.patients.length === 0) {
+                patientResults.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">Sin resultados</div>';
+            } else {
+                patientResults.innerHTML = data.patients.map(p =>
+                    `<div class="px-3 py-2 text-sm cursor-pointer hover:bg-sante-bg transition" data-id="${p.id}" data-name="${p.last_name}, ${p.first_name}">${p.last_name}, ${p.first_name}</div>`
+                ).join('');
+            }
+            patientResults.classList.remove('hidden');
+        }, 300);
+    });
+
+    patientResults.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-id]');
+        if (!item) return;
+        aptPatient.value = item.dataset.id;
+        patientSearch.value = item.dataset.name;
+        patientResults.classList.add('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!patientSearch.contains(e.target) && !patientResults.contains(e.target)) {
+            patientResults.classList.add('hidden');
+        }
+    });
+
+    // Recurrence toggle
+    document.getElementById('apt-recurrent').addEventListener('change', (e) => {
+        document.getElementById('recurrence-options').classList.toggle('hidden', !e.target.checked);
+    });
+
+    // Cancel appointment
+    document.getElementById('btn-cancel-apt').addEventListener('click', () => {
+        document.getElementById('cancel-confirm-modal').classList.remove('hidden');
+    });
+
+    // Confirm appointment
+    document.getElementById('btn-confirm-apt').addEventListener('click', async () => {
+        const id = document.getElementById('apt-id').value;
+        const res = await authFetch(`/api/appointments/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CONFIRMED' }),
+        });
+        if (res.ok) {
+            closeModal();
+            calendar.refetchEvents();
+            showToast('Cita confirmada');
+        }
+    });
+
+    async function confirmCancelApt() {
+        document.getElementById('cancel-confirm-modal').classList.add('hidden');
+        const id = document.getElementById('apt-id').value;
+        const aptStart = document.getElementById('apt-start').value;
+        const aptPhysio = document.getElementById('apt-physio').value;
+        const res = await authFetch(`/api/appointments/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            closeModal();
+            calendar.refetchEvents();
+            showToast('Cita cancelada');
+            checkWaitlistAfterCancel(aptStart, aptPhysio);
+        }
+    }
+
+    // Finalizar cita
+        // Finalizar cita - abrir modal
+    document.getElementById('btn-finish-apt').addEventListener('click', () => {
+        openFinishModal();
+    });
+
+    function openFinishModal() {
+        document.getElementById('fin-observations').value = '';
+        document.getElementById('fin-amount').value = window.defaultSessionPrice || '';
+        document.getElementById('fin-payment').value = '';
+        document.getElementById('fin-doc-type').value = 'RECEIPT';
+        document.getElementById('fin-use-pack').checked = false;
+        const packCheckbox = document.getElementById('apt-consume-pack');
+        const packSection = document.getElementById('fin-pack-section');
+        if (packCheckbox && packCheckbox.dataset.packId) {
+            packSection.classList.remove('hidden');
+            document.getElementById('fin-pack-label').textContent = 'Consumir sesion del bono';
+            // Si el check del bono estaba marcado en la cita, preseleccionar
+            if (packCheckbox.checked) {
+                document.getElementById('fin-use-pack').checked = true;
+                document.getElementById('fin-payment').value = 'PACK';
+            }
+        } else {
+            packSection.classList.add('hidden');
+        }
+        toggleFinAmount();
+        document.getElementById('finish-modal').classList.remove('hidden');
+    }
+
+    function toggleFinAmount() {
+        const isPack = document.getElementById('fin-payment').value === 'PACK';
+        document.getElementById('fin-amount-section').classList.toggle('hidden', isPack);
+        if (isPack) document.getElementById('fin-amount').value = '';
+    }
+
+    function closeFinishModal() {
+        document.getElementById('finish-modal').classList.add('hidden');
+    }
+
+    document.getElementById('finish-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const aptId = document.getElementById('apt-id').value;
+        const patientId = document.getElementById('apt-patient').value;
+        const observations = document.getElementById('fin-observations').value || null;
+        const usePack = document.getElementById('fin-use-pack').checked;
+        const paymentVal = document.getElementById('fin-payment').value;
+        const actualPayment = (paymentVal && paymentVal !== 'PACK') ? paymentVal : null;
+
+        const sessionRes = await authFetch('/api/clinical/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patient_id: parseInt(patientId), appointment_id: parseInt(aptId), observations }),
+        });
+        if (!sessionRes.ok) {
+            const err = await sessionRes.json();
+            showToast(err.detail || 'Error al registrar sesión', 'error');
+            return;
+        }
+
+        const amount = paymentVal === 'PACK' ? 0 : (parseFloat(document.getElementById('fin-amount').value) || 0);
+        const invoiceBody = {
+            patient_id: parseInt(patientId),
+            appointment_id: parseInt(aptId),
+            session_pack_id: usePack ? parseInt(document.getElementById('apt-consume-pack').dataset.packId) : null,
+            doc_type: document.getElementById('fin-doc-type').value,
+            amount: amount,
+            payment_method: actualPayment,
+            is_paid: !!actualPayment || usePack,
+        };
+        await authFetch('/api/billing/invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(invoiceBody),
+        });
+
+        if (usePack) {
+            const packId = document.getElementById('apt-consume-pack').dataset.packId;
+            await authFetch('/api/billing/packs/' + packId + '/consume', { method: 'POST' });
+        }
+
+        await authFetch('/api/appointments/' + aptId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'FINALIZED' }),
+        });
+
+        closeFinishModal();
+        closeModal();
+        calendar.refetchEvents();
+        showToast('Cita finalizada');
+    });
+
+    function closePastDateModal() {
+        document.getElementById('past-date-modal').classList.add('hidden');
+    }
+
+    function forceSavePastDate() {
+        closePastDateModal();
+        skipPastDateCheck = true;
+        document.getElementById('apt-form').dispatchEvent(new Event('submit'));
+    }
+
+    // Check physio personal schedule
+    function checkPhysioSchedule(physioId, startTime, duration) {
+        const schedule = physioSchedules[String(physioId)];
+        if (!schedule) return null; // No schedule configured, allow
+        const dt = new Date(startTime);
+        const dow = (dt.getDay() + 6) % 7; // Convert to 0=Monday
+        const daySchedule = schedule[dow];
+        if (!daySchedule) return null;
+        if (daySchedule.is_off) return 'El fisioterapeuta tiene el día libre';
+        const time = dt.toTimeString().slice(0, 5);
+        const endDt = new Date(dt.getTime() + duration * 60000);
+        const endTime = endDt.toTimeString().slice(0, 5);
+
+        const blocks = [];
+        if (daySchedule.morning_open && daySchedule.morning_close)
+            blocks.push([daySchedule.morning_open, daySchedule.morning_close]);
+        if (daySchedule.afternoon_open && daySchedule.afternoon_close)
+            blocks.push([daySchedule.afternoon_open, daySchedule.afternoon_close]);
+
+        if (blocks.length === 0) return null;
+
+        const inBlock = blocks.some(([o, c]) => time >= o && endTime <= c);
+        if (!inBlock) {
+            const ranges = blocks.map(([o, c]) => `${o}-${c}`).join(', ');
+            return `La cita está fuera del horario del fisioterapeuta (${ranges})`;
+        }
+        return null;
+    }
+
+    // Check physio absences
+    function checkPhysioAbsence(physioId, startTime, duration) {
+        const absences = physioAbsences[String(physioId)];
+        if (!absences || absences.length === 0) return null;
+        const dt = new Date(startTime);
+        const dayStr = dt.toISOString().slice(0, 10);
+        const time = dt.toTimeString().slice(0, 5);
+        const endDt = new Date(dt.getTime() + duration * 60000);
+        const endTime = endDt.toTimeString().slice(0, 5);
+
+        for (const a of absences) {
+            if (dayStr < a.date_from || dayStr > a.date_to) continue;
+            // Day matches — check time
+            if (!a.time_from || !a.time_to) {
+                return `El fisioterapeuta tiene ausencia registrada (${a.reason || 'sin motivo'})`;
+            }
+            // Partial day: check overlap
+            if (time < a.time_to && endTime > a.time_from) {
+                return `El fisioterapeuta tiene ausencia de ${a.time_from} a ${a.time_to} (${a.reason || 'sin motivo'})`;
+            }
+        }
+        return null;
+    }
+
+    // Form submit
+    let skipPastDateCheck = false;
+
+    document.getElementById('apt-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('modal-error');
+        errorEl.classList.add('hidden');
+
+        const id = document.getElementById('apt-id').value;
+        const patientId = document.getElementById('apt-patient').value;
+        const physioId = document.getElementById('apt-physio').value;
+        const startTime = document.getElementById('apt-start').value;
+        const duration = parseInt(document.getElementById('apt-duration').value);
+
+        // Comprobar fecha pasada solo en creación
+        if (!id && !skipPastDateCheck) {
+            const selectedDate = new Date(startTime);
+            if (selectedDate < new Date()) {
+                document.getElementById('past-date-modal').classList.remove('hidden');
+                return;
+            }
+        }
+        skipPastDateCheck = false;
+        const location = document.getElementById('apt-location').value;
+        const status = document.getElementById('apt-status').value;
+        const notes = document.getElementById('apt-notes').value;
+        const isRecurrent = document.getElementById('apt-recurrent').checked;
+
+        if (!patientId) { errorEl.textContent = 'Selecciona un paciente'; errorEl.classList.remove('hidden'); return; }
+
+        // Validar horario personal del fisio
+        const scheduleWarning = checkPhysioSchedule(physioId, startTime, duration);
+        const absenceWarning = checkPhysioAbsence(physioId, startTime, duration);
+        const warning = absenceWarning || scheduleWarning;
+        if (warning && !e.target.dataset.confirmed) {
+            showConfirm('Aviso', warning + ' \u2014 ¿Deseas guardar la cita de todas formas?', () => { e.target.dataset.confirmed = 'true'; e.target.dispatchEvent(new Event('submit')); });
+            return;
+        }
+        delete e.target.dataset.confirmed;
+
+        let res;
+        if (id) {
+            res = await authFetch(`/api/appointments/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_time: startTime, duration_minutes: duration, location, status, notes, physio_id: parseInt(physioId) }),
+            });
+        } else if (isRecurrent) {
+            const days = [...document.querySelectorAll('input[name="rec-day"]:checked')].map(c => parseInt(c.value));
+            const weeks = parseInt(document.getElementById('rec-weeks').value);
+            if (days.length === 0) { errorEl.textContent = 'Selecciona al menos un día'; errorEl.classList.remove('hidden'); return; }
+            res = await authFetch('/api/appointments/recurrence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ patient_id: parseInt(patientId), physio_id: parseInt(physioId), start_time: startTime, duration_minutes: duration, location, notes, days_of_week: days, weeks }),
+            });
+        } else {
+            res = await authFetch('/api/appointments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ patient_id: parseInt(patientId), physio_id: parseInt(physioId), start_time: startTime, duration_minutes: duration, location, notes }),
+            });
+        }
+
+        if (res.ok) {
+            const patientId = document.getElementById('apt-patient').value;
+            closeModal();
+            calendar.refetchEvents();
+            showToast(id ? 'Cita actualizada' : 'Cita creada');
+            if (!id) checkPatientInWaitlist(patientId);
+        } else {
+            const err = await res.json();
+            errorEl.textContent = err.detail || 'Error al guardar';
+            errorEl.classList.remove('hidden');
+            // Si es error de horario, mostrar botón para forzar
+            if (res.status === 409 && err.detail && err.detail.includes('horario')) {
+                document.getElementById('btn-force-save').classList.remove('hidden');
+            }
+        }
+    });
+
+    // Forzar guardado fuera de horario
+    document.getElementById('btn-force-save').addEventListener('click', async () => {
+        const patientId = document.getElementById('apt-patient').value;
+        const physioId = document.getElementById('apt-physio').value;
+        const startTime = document.getElementById('apt-start').value;
+        const duration = parseInt(document.getElementById('apt-duration').value);
+        const location = document.getElementById('apt-location').value;
+        const notes = document.getElementById('apt-notes').value;
+
+        const res = await authFetch('/api/appointments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patient_id: parseInt(patientId), physio_id: parseInt(physioId), start_time: startTime, duration_minutes: duration, location, notes, force: true }),
+        });
+
+        if (res.ok) {
+            closeModal();
+            calendar.refetchEvents();
+            showToast('Cita creada');
+            checkPatientInWaitlist(patientId);
+        } else {
+            const err = await res.json();
+            document.getElementById('modal-error').textContent = err.detail || 'Error al guardar';
+        }
+    });
+
+    // --- Pago bono desde calendario ---
+    function openCalendarPayModal(invoiceId) {
+        document.getElementById('cal-pay-invoice-id').value = invoiceId;
+        document.getElementById('calendar-pay-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('calendar-pay-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const invoiceId = document.getElementById('cal-pay-invoice-id').value;
+        const method = document.getElementById('cal-pay-method').value;
+        const res = await authFetch(`/api/billing/invoices/${invoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payment_method: method, is_paid: true }),
+        });
+        if (res.ok) {
+            document.getElementById('calendar-pay-modal').classList.add('hidden');
+            showToast('Pago registrado');
+            const patId = document.getElementById('apt-patient').value;
+            if (patId) loadPatientPack(patId);
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al registrar pago', 'error');
+        }
+    });
+
+    // Init
+    Promise.all([loadPhysios(), loadSettings(), loadPhysioSchedules()]).then(initCalendar);
+
+    // Show notifications modal on login
+    (async function checkLoginNotifications() {
+        if (!localStorage.getItem('just_logged_in')) return;
+        localStorage.removeItem('just_logged_in');
+        try {
+            const res = await authFetch('/api/notifications/unread-count');
+            const data = await res.json();
+            if (data.count > 0) {
+                const modal = document.getElementById('notif-modal');
+                const text = document.getElementById('notif-modal-text');
+                const goBtn = document.getElementById('notif-modal-go');
+                text.textContent = `Tienes ${data.count} aviso${data.count > 1 ? 's' : ''} sin leer.`;
+                goBtn.classList.remove('hidden');
+                modal.classList.remove('hidden');
+            }
+        } catch(e) {}
+    })();
+
+    // --- Lista de espera ---
+    const timePrefLabels = { ANY: 'Cualquier hora', MORNING: 'Mañanas', AFTERNOON: 'Tardes', CUSTOM: 'Franja concreta' };
+
+    function openWaitlistModal() { document.getElementById('waitlist-modal').classList.remove('hidden'); loadWaitlist(); }
+    function closeWaitlistModal() { document.getElementById('waitlist-modal').classList.add('hidden'); }
+    function closeWaitlistMatchModal() { document.getElementById('waitlist-match-modal').classList.add('hidden'); }
+
+    function openWaitlistForm() {
+        loadWlPhysios();
+        document.getElementById('waitlist-form-modal').classList.remove('hidden');
+    }
+    function closeWaitlistForm() {
+        document.getElementById('waitlist-form-modal').classList.add('hidden');
+        document.getElementById('waitlist-form').reset();
+        document.getElementById('wl-patient').value = '';
+        document.getElementById('wl-patient-search').value = '';
+        document.getElementById('wl-custom-time-row').classList.add('hidden');
+        document.getElementById('wl-date-fields').classList.remove('hidden');
+        document.getElementById('wl-date-to-col').classList.remove('hidden');
+    }
+
+    async function loadWlPhysios() {
+        const container = document.getElementById('wl-physio-checkboxes');
+        if (container.children.length > 0) return;
+        const res = await authFetch('/api/appointments/physios');
+        const list = await res.json();
+        container.innerHTML = list.map(p =>
+            `<label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" name="wl-physio" value="${p.id}" class="rounded"><span class="text-gray-700">${p.full_name}</span></label>`
+        ).join('');
+    }
+
+    async function loadWaitlist() {
+        const res = await authFetch('/api/waitlist');
+        const entries = await res.json();
+        const container = document.getElementById('waitlist-list');
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">No hay pacientes en lista de espera.</p>';
+            return;
+        }
+        container.innerHTML = entries.map(e => {
+            const dateStr = formatDate(e.created_at);
+            const timeStr = new Date(e.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            let prefs = [];
+            if (e.priority) prefs.push(`<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">Prioritario</span>`);
+            if (e.asap) prefs.push(`<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs">Lo antes posible</span>`);
+            if (e.physio_names && e.physio_names.length > 0) prefs.push(`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs">Fisio: ${e.physio_names.join(', ')}</span>`);
+            if (e.time_preference === 'CUSTOM' && e.time_from && e.time_to) {
+                prefs.push(`<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">${e.time_from} - ${e.time_to}</span>`);
+            } else if (e.time_preference !== 'ANY') {
+                prefs.push(`<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">${timePrefLabels[e.time_preference]}</span>`);
+            }
+            if (e.date_from || e.date_to) {
+                const from = e.date_from ? formatDate(e.date_from) : '';
+                const to = e.date_to ? formatDate(e.date_to) : '';
+                prefs.push(`<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs">${from}${from && to && from !== to ? ' <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg> ' : ''}${from !== to ? to : ''}</span>`);
+            }
+            const borderClass = e.priority ? 'border-red-400 border-3' : 'border-sante-primary/40 border-2';
+            return `<div class="bg-white ${borderClass} rounded-lg p-3"><div class="flex justify-between items-start gap-2"><div class="flex-1"><p class="font-semibold text-sm text-gray-800">${e.patient_name}</p><p class="text-xs text-gray-500">${e.patient_phone} · ${dateStr} ${timeStr}</p><div class="flex flex-wrap gap-1 mt-1">${prefs.join('')}</div>${e.notes ? `<p class="text-xs text-gray-600 mt-1 italic">${e.notes}</p>` : ''}</div><button onclick="deleteWlEntry(${e.id})" class="text-red-500 hover:text-red-700"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button></div></div>`;
+        }).join('');
+    }
+
+    // Waitlist patient search
+    let wlSearchTimeout;
+    const wlSearch = document.getElementById('wl-patient-search');
+    const wlResults = document.getElementById('wl-patient-results');
+    wlSearch.addEventListener('input', (e) => {
+        clearTimeout(wlSearchTimeout);
+        document.getElementById('wl-patient').value = '';
+        const q = e.target.value.trim();
+        if (q.length < 2) { wlResults.classList.add('hidden'); return; }
+        wlSearchTimeout = setTimeout(async () => {
+            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=8`);
+            const data = await res.json();
+            wlResults.innerHTML = data.patients.length === 0
+                ? '<div class="px-3 py-2 text-sm text-gray-400">Sin resultados</div>'
+                : data.patients.map(p => `<div class="px-3 py-2 text-sm cursor-pointer hover:bg-sante-bg" data-id="${p.id}" data-name="${p.last_name}, ${p.first_name}">${p.last_name}, ${p.first_name}</div>`).join('');
+            wlResults.classList.remove('hidden');
+        }, 300);
+    });
+    wlResults.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-id]');
+        if (!item) return;
+        document.getElementById('wl-patient').value = item.dataset.id;
+        wlSearch.value = item.dataset.name;
+        wlResults.classList.add('hidden');
+    });
+
+    function toggleWlCustomTime() { document.getElementById('wl-custom-time-row').classList.toggle('hidden', document.getElementById('wl-time-pref').value !== 'CUSTOM'); }
+    function toggleWlDateFields() { document.getElementById('wl-date-fields').classList.toggle('hidden', document.getElementById('wl-asap').checked); }
+    function toggleWlSingleDay() {
+        const single = document.getElementById('wl-single-day').checked;
+        document.getElementById('wl-date-to-col').classList.toggle('hidden', single);
+    }
+
+    document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const patientId = document.getElementById('wl-patient').value;
+        if (!patientId) { showToast('Selecciona un paciente', 'error'); return; }
+        const selectedPhysios = [...document.querySelectorAll('input[name="wl-physio"]:checked')].map(c => parseInt(c.value));
+        const singleDay = document.getElementById('wl-single-day').checked;
+        const dateFrom = document.getElementById('wl-date-from').value || null;
+        const body = {
+            patient_id: parseInt(patientId),
+            physio_ids: selectedPhysios.length > 0 ? selectedPhysios : null,
+            time_preference: document.getElementById('wl-time-pref').value,
+            time_from: document.getElementById('wl-time-from').value || null,
+            time_to: document.getElementById('wl-time-to').value || null,
+            date_from: dateFrom,
+            date_to: singleDay ? dateFrom : (document.getElementById('wl-date-to').value || null),
+            asap: document.getElementById('wl-asap').checked,
+            priority: document.getElementById('wl-priority').checked,
+            notes: document.getElementById('wl-notes').value || null,
+        };
+        const res = await authFetch('/api/waitlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (res.ok) { closeWaitlistForm(); loadWaitlist(); showToast('Añadido a lista de espera'); }
+        else { const err = await res.json(); showToast(err.detail || 'Error', 'error'); }
+    });
+
+    async function deleteWlEntry(id) {
+        await authFetch(`/api/waitlist/${id}`, { method: 'DELETE' });
+        loadWaitlist();
+    }
+
+    // Check waitlist matches on cancel
+    let cancelledSlot = {};
+    async function checkWaitlistAfterCancel(startTime, physioId) {
+        cancelledSlot = { startTime, physioId };
+        const res = await authFetch(`/api/waitlist/check-slot?start_time=${encodeURIComponent(startTime)}&physio_id=${physioId}`);
+        const matches = await res.json();
+        if (matches.length > 0) {
+            const container = document.getElementById('waitlist-match-list');
+            container.innerHTML = matches.map(m => `
+                <div class="flex items-center justify-between border border-gray-200 rounded px-3 py-2">
+                    <div>
+                        <p class="text-sm font-medium text-gray-800">${m.patient_name}</p>
+                        <p class="text-xs text-gray-500">${m.patient_phone}</p>
+                    </div>
+                    <button onclick="createFromWaitlist(${m.patient_id}, '${m.patient_name.replace(/'/g, "\\'")}'${m.priority ? ', true' : ''})" class="text-xs bg-sante-primary text-white px-3 py-1 rounded hover:bg-sante-primary/90">Crear cita</button>
+                </div>
+            `).join('');
+            document.getElementById('waitlist-match-modal').classList.remove('hidden');
+        }
+    }
+
+    function createFromWaitlist(patientId, patientName) {
+        closeWaitlistMatchModal();
+        openCreateModal(cancelledSlot.startTime);
+        document.getElementById('apt-patient').value = patientId;
+        document.getElementById('patient-search').value = patientName;
+        document.getElementById('apt-physio').value = cancelledSlot.physioId;
+    }
+
+    // --- WhatsApp reminder ---
+    document.getElementById('btn-whatsapp').addEventListener('click', async () => {
+        const patientId = document.getElementById('apt-patient').value;
+        const startTime = document.getElementById('apt-start').value;
+        if (!patientId || !startTime) return;
+
+        const res = await authFetch(`/api/patients/${patientId}`);
+        const patient = await res.json();
+        let phone = (patient.phone || '').replace(/\s+/g, '');
+        if (!phone) { showToast('El paciente no tiene teléfono', 'error'); return; }
+        // Formato internacional España
+        if (phone.startsWith('6') || phone.startsWith('7')) phone = '34' + phone;
+        else if (phone.startsWith('+')) phone = phone.replace('+', '');
+        else if (!phone.startsWith('34')) phone = '34' + phone;
+
+        const dt = new Date(startTime);
+        const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const fecha = `${dias[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()}`;
+        const hora = dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+        const msg = (window.whatsappTemplate || '')
+            .replace('{nombre}', patient.first_name)
+            .replace('{fecha}', fecha)
+            .replace('{hora}', hora);
+        window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`, 'whatsapp');
+    });
+
+    // Check if patient is in waitlist after creating appointment
+    async function checkPatientInWaitlist(patientId) {
+        const res = await authFetch(`/api/waitlist/patient/${patientId}/pending`);
+        const data = await res.json();
+        if (data.count > 0) {
+            document.getElementById('waitlist-remove-modal').classList.remove('hidden');
+            document.getElementById('btn-remove-waitlist').onclick = async () => {
+                await authFetch(`/api/waitlist/patient/${patientId}`, { method: 'DELETE' });
+                document.getElementById('waitlist-remove-modal').classList.add('hidden');
+                showToast('Paciente eliminado de la lista de espera');
+            };
+        }
+    }
+</script>
+{% endblock %}

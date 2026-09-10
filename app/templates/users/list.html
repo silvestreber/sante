@@ -1,0 +1,221 @@
+﻿{% extends "base.html" %}
+{% block title %}Usuarios — Santé{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Gestión de usuarios</h1>
+    <button onclick="openModal()" class="bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">+ Nuevo usuario</button>
+</div>
+
+<div class="bg-white border-2 border-sante-primary/40 rounded shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-left">
+            <tr>
+                <th class="px-4 py-2">Nombre</th>
+                <th class="px-4 py-2">Usuario</th>
+                <th class="px-4 py-2">Rol</th>
+                <th class="px-4 py-2">Fisio</th>
+                <th class="px-4 py-2">Colaborador</th>
+                <th class="px-4 py-2">Estado</th>
+                <th class="px-4 py-2">Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="users-table"></tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+        <h2 id="modal-title" class="text-lg font-bold mb-4">Nuevo usuario</h2>
+        <form id="user-form" class="space-y-3">
+            <input type="hidden" id="user-id">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Nombre completo</label>
+                <input id="full_name" type="text" required class="w-full border rounded px-3 py-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Usuario</label>
+                <input id="username" type="text" required class="w-full border rounded px-3 py-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Contraseña <span id="pwd-hint" class="text-xs text-gray-400"></span></label>
+                <div class="relative">
+                    <input id="password" type="password" class="w-full border rounded px-3 py-2 pr-10">
+                    <button type="button" onclick="togglePassword()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Rol</label>
+                <select id="role" required class="w-full border rounded px-3 py-2">
+                    <option value="ADMIN">Administrador</option>
+                    <option value="RECEPTION">Recepción</option>
+                    <option value="PHYSIO">Fisioterapeuta</option>
+                </select>
+            </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input id="is_physio" type="checkbox" class="rounded border-gray-300" onchange="toggleColorPicker()">
+                    Puede atender pacientes (fisioterapeuta)
+                </label>
+            </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input id="is_colaborador" type="checkbox" class="rounded border-gray-300">
+                    Colaborador (marca X en columna COLABORADOR del Excel)
+                </label>
+            </div>
+            <div id="color-picker-row" class="hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Color en calendario</label>
+                <div class="flex items-center gap-3">
+                    <input id="user-color" type="color" value="#0d9488" class="w-10 h-10 rounded border-2 border-sante-primary/40 cursor-pointer">
+                    <span id="color-preview" class="text-xs text-gray-500">#0d9488</span>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-sante-primary text-white rounded hover:bg-sante-primary/90">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const roleLabels = { ADMIN: 'Administrador', RECEPTION: 'Recepción', PHYSIO: 'Fisioterapeuta' };
+
+async function loadUsers() {
+    const res = await authFetch('/api/users');
+    const users = await res.json();
+    const tbody = document.getElementById('users-table');
+    tbody.innerHTML = users.map(u => `
+        <tr class="border-t">
+            <td class="px-4 py-2">${u.full_name}</td>
+            <td class="px-4 py-2">${u.username}</td>
+            <td class="px-4 py-2">${roleLabels[u.role] || u.role}</td>
+            <td class="px-4 py-2">
+                <span class="px-2 py-0.5 rounded text-xs ${u.is_physio ? 'bg-sante-bg text-sante-primary' : 'bg-gray-100 text-gray-500'}">
+                    ${u.is_physio ? 'Sí' : 'No'}
+                </span>
+                ${u.is_physio && u.color ? `<span class="inline-block w-4 h-4 rounded-full ml-2 align-middle border border-gray-300" style="background:${u.color}"></span>` : ''}
+            </td>
+            <td class="px-4 py-2">
+                <span class="px-2 py-0.5 rounded text-xs ${u.is_colaborador ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}">
+                    ${u.is_colaborador ? 'Sí' : 'No'}
+                </span>
+            </td>
+            <td class="px-4 py-2">
+                <span class="px-2 py-0.5 rounded text-xs ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                    ${u.is_active ? 'Activo' : 'Inactivo'}
+                </span>
+            </td>
+            <td class="px-4 py-2 flex gap-2">
+                <button onclick='editUser(${JSON.stringify(u)})' class="text-sante-primary hover:underline text-xs">Editar</button>
+                <button onclick="toggleActive(${u.id}, ${u.is_active})" class="text-xs ${u.is_active ? 'text-red-600' : 'text-green-600'} hover:underline">
+                    ${u.is_active ? 'Desactivar' : 'Activar'}
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openModal() {
+    document.getElementById('modal-title').textContent = 'Nuevo usuario';
+    document.getElementById('user-id').value = '';
+    document.getElementById('user-form').reset();
+    document.getElementById('username').disabled = false;
+    document.getElementById('password').required = true;
+    document.getElementById('pwd-hint').textContent = '';
+    document.getElementById('user-color').value = '#0d9488';
+    document.getElementById('color-preview').textContent = '#0d9488';
+    toggleColorPicker();
+    document.getElementById('modal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.add('hidden');
+}
+
+function editUser(u) {
+    document.getElementById('modal-title').textContent = 'Editar usuario';
+    document.getElementById('user-id').value = u.id;
+    document.getElementById('full_name').value = u.full_name;
+    document.getElementById('username').value = u.username;
+    document.getElementById('username').disabled = true;
+    document.getElementById('password').value = '';
+    document.getElementById('password').required = false;
+    document.getElementById('pwd-hint').textContent = '(dejar vacío para no cambiar)';
+    document.getElementById('role').value = u.role;
+    document.getElementById('is_physio').checked = u.is_physio;
+    document.getElementById('is_colaborador').checked = u.is_colaborador;
+    document.getElementById('user-color').value = u.color || '#0d9488';
+    document.getElementById('color-preview').textContent = u.color || '#0d9488';
+    toggleColorPicker();
+    document.getElementById('modal').classList.remove('hidden');
+}
+
+async function toggleActive(id, isActive) {
+    const action = isActive ? 'Desactivar' : 'Activar';
+    showConfirm(action + ' usuario', '¿' + action + ' este usuario?', async () => {
+        await authFetch(`/api/users/${id}/deactivate`, { method: 'PATCH' });
+        loadUsers();
+    });
+}
+
+document.getElementById('user-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('user-id').value;
+    const body = {
+        full_name: document.getElementById('full_name').value,
+        role: document.getElementById('role').value,
+        is_physio: document.getElementById('is_physio').checked,
+        is_colaborador: document.getElementById('is_colaborador').checked,
+        color: document.getElementById('is_physio').checked ? document.getElementById('user-color').value : null,
+    };
+    if (id) {
+        const pwd = document.getElementById('password').value;
+        if (pwd) body.password = pwd;
+        await authFetch(`/api/users/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    } else {
+        body.username = document.getElementById('username').value;
+        body.password = document.getElementById('password').value;
+        await authFetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    }
+    closeModal();
+    loadUsers();
+});
+
+loadUsers();
+
+document.getElementById('role').addEventListener('change', (e) => {
+    if (e.target.value === 'PHYSIO') {
+        document.getElementById('is_physio').checked = true;
+        toggleColorPicker();
+    }
+});
+
+function toggleColorPicker() {
+    const show = document.getElementById('is_physio').checked;
+    document.getElementById('color-picker-row').classList.toggle('hidden', !show);
+}
+
+function togglePassword() {
+    const input = document.getElementById('password');
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+document.getElementById('user-color').addEventListener('input', (e) => {
+    document.getElementById('color-preview').textContent = e.target.value;
+});
+</script>
+{% endblock %}

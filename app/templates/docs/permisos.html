@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Permisos por rol — Santé{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Tabla de permisos por rol</h1>
+    <p class="text-sm text-gray-500 mt-1">Accesos y acciones disponibles según el rol del usuario.</p>
+</div>
+
+<div class="space-y-6">
+
+    {% set sections = [
+        {
+            "title": "Calendario",
+            "rows": [
+                ["Ver calendario y citas", true, true, true],
+                ["Crear / editar citas", true, true, false],
+                ["Cancelar citas", true, true, false],
+                ["Ver citas de todos los fisios", true, true, false],
+                ["Ver solo sus propias citas", false, false, true],
+                ["Finalizar cita (registrar sesión clínica)", true, false, true],
+                ["Lista de espera", true, true, false],
+            ]
+        },
+        {
+            "title": "Pacientes",
+            "rows": [
+                ["Ver listado de pacientes", true, true, true],
+                ["Crear / editar paciente", true, true, false],
+                ["Desactivar paciente", true, false, false],
+                ["Ver ficha completa del paciente", true, true, true],
+                ["Ver historial clínico", true, false, true],
+                ["Añadir / editar sesión clínica", true, false, true],
+                ["Ver tratamientos", true, false, true],
+                ["Crear / editar tratamientos", true, false, true],
+                ["Subir / ver documentos del paciente", true, true, true],
+                ["Firmar consentimiento informado", true, true, false],
+            ]
+        },
+        {
+            "title": "Facturación",
+            "rows": [
+                ["Ver facturas del paciente", true, true, false],
+                ["Crear factura / albarán / recibo", true, true, false],
+                ["Editar factura", true, true, false],
+                ["Eliminar / revertir pago", true, true, false],
+                ["Ver y gestionar bonos de sesiones", true, true, false],
+                ["Exportar facturación a Excel (gestoría)", true, false, false],
+            ]
+        },
+        {
+            "title": "Contabilidad",
+            "rows": [
+                ["Ver ingresos y gastos", true, false, false],
+                ["Crear / editar apuntes manuales", true, false, false],
+                ["Eliminar apuntes", true, false, false],
+                ["Ver resumen y totales", true, false, false],
+            ]
+        },
+        {
+            "title": "Usuarios",
+            "rows": [
+                ["Ver listado de usuarios", true, false, false],
+                ["Crear usuario", true, false, false],
+                ["Editar usuario (nombre, rol, color, colaborador)", true, false, false],
+                ["Cambiar contraseña de otro usuario", true, false, false],
+                ["Activar / desactivar usuario", true, false, false],
+            ]
+        },
+        {
+            "title": "Avisos (notificaciones)",
+            "rows": [
+                ["Ver avisos recibidos", true, true, true],
+                ["Enviar aviso a otro usuario", true, true, true],
+                ["Marcar como leído", true, true, true],
+            ]
+        },
+        {
+            "title": "Configuración",
+            "rows": [
+                ["Acceder a configuración", true, true, false],
+                ["Importar pacientes desde Excel", true, true, false],
+                ["Editar horario semanal de la clínica", true, false, false],
+                ["Gestionar horarios especiales", true, false, false],
+                ["Gestionar festivos", true, false, false],
+                ["Configurar disponibilidad de fisios", true, false, false],
+                ["Configuración general (duración, precios, WhatsApp)", true, false, false],
+                ["Exportar gestoría Excel", true, false, false],
+                ["Backup: exportar / restaurar BD", true, false, false],
+                ["Apagar sistema (Raspberry Pi)", true, false, false],
+            ]
+        },
+        {
+            "title": "Auditoría",
+            "rows": [
+                ["Ver log de auditoría", true, false, false],
+                ["Filtrar por usuario / acción / entidad", true, false, false],
+            ]
+        },
+        {
+            "title": "Documentación interna",
+            "rows": [
+                ["Ver funcionalidades", true, false, false],
+                ["Ver tabla de permisos", true, false, false],
+                ["Editar notas / TODO", true, false, false],
+            ]
+        },
+    ] %}
+
+    {% for section in sections %}
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden">
+        <div class="bg-sante-primary px-4 py-2">
+            <h2 class="text-sm font-semibold text-white">{{ section.title }}</h2>
+        </div>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+                <tr>
+                    <th class="px-4 py-2 text-left text-gray-600 font-medium w-full">Acción</th>
+                    <th class="px-4 py-2 text-center text-gray-600 font-medium whitespace-nowrap">Admin</th>
+                    <th class="px-4 py-2 text-center text-gray-600 font-medium whitespace-nowrap">Recepción</th>
+                    <th class="px-4 py-2 text-center text-gray-600 font-medium whitespace-nowrap">Fisio</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for row in section.rows %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 text-gray-700">{{ row[0] }}</td>
+                    <td class="px-4 py-2 text-center">
+                        {% if row[1] %}
+                        <svg class="w-4 h-4 text-green-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        {% else %}
+                        <svg class="w-4 h-4 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2 text-center">
+                        {% if row[2] %}
+                        <svg class="w-4 h-4 text-green-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        {% else %}
+                        <svg class="w-4 h-4 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2 text-center">
+                        {% if row[3] %}
+                        <svg class="w-4 h-4 text-green-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        {% else %}
+                        <svg class="w-4 h-4 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+if (!checkAuth()) { window.location.href = '/login'; }
+setupNav();
+if (getRole() !== 'ADMIN') { window.location.href = '/calendar'; }
+</script>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Avisos - Santé{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Avisos</h1>
+        <button onclick="markAllRead()" class="text-sm text-sante-primary hover:underline">Marcar todos como leídos</button>
+    </div>
+
+    <!-- Formulario enviar aviso -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-3">Enviar aviso</h2>
+        <div class="flex flex-col sm:flex-row gap-3">
+            <select id="recipient" class="border rounded px-3 py-2 flex-shrink-0">
+                <option value="">Seleccionar destinatario...</option>
+            </select>
+            <input id="message" type="text" placeholder="Escribe tu mensaje..." class="border rounded px-3 py-2 flex-1">
+            <button onclick="sendNotification()" class="bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Enviar</button>
+        </div>
+        <p id="send-feedback" class="text-sm mt-2 hidden"></p>
+    </div>
+
+    <!-- Lista de avisos -->
+    <div id="notifications-list" class="space-y-2">
+        <p class="text-gray-500 text-sm">Cargando...</p>
+    </div>
+</div>
+
+<!-- Modal confirmación eliminar -->
+<div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-3">Eliminar aviso</h2>
+        <p class="text-sm text-gray-600 mb-5">¿Estás seguro de que quieres eliminar este aviso?</p>
+        <div class="flex gap-2">
+            <button onclick="confirmDelete()" class="flex-1 bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700">Eliminar</button>
+            <button onclick="closeDeleteModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        loadUsers();
+        loadNotifications();
+    });
+
+    async function loadUsers() {
+        const res = await authFetch('/api/notifications/users');
+        const users = await res.json();
+        const select = document.getElementById('recipient');
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = `${u.full_name} (${u.role})`;
+            select.appendChild(opt);
+        });
+    }
+
+    async function loadNotifications() {
+        const res = await authFetch('/api/notifications');
+        const notifications = await res.json();
+        const container = document.getElementById('notifications-list');
+
+        if (notifications.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No tienes avisos.</p>';
+            return;
+        }
+
+        container.innerHTML = notifications.map(n => {
+            const date = formatDateTime(n.created_at);
+            const borderClass = n.is_read
+                ? 'bg-white border-2 border-sante-primary/40'
+                : 'bg-white border-4 border-sante-primary';
+            const textClass = n.is_read ? '' : 'font-bold';
+            return `
+                <div class="${borderClass} rounded-lg shadow p-4 flex justify-between items-start gap-3">
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-800 ${textClass}">${n.message}</p>
+                        <p class="text-xs text-gray-500 mt-1 ${textClass}">De: ${n.sender_name} · ${date}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        ${!n.is_read ? `<button onclick="markRead(${n.id})" class="bg-sante-primary text-white text-xs px-3 py-1 rounded hover:bg-sante-primary/90 whitespace-nowrap">Marcar leído</button>` : ''}
+                        <button onclick="deleteNotification(${n.id})" class="text-red-500 hover:text-red-700" title="Eliminar">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function sendNotification() {
+        const recipient_id = document.getElementById('recipient').value;
+        const message = document.getElementById('message').value.trim();
+        const feedback = document.getElementById('send-feedback');
+
+        if (!recipient_id || !message) {
+            feedback.textContent = 'Selecciona destinatario y escribe un mensaje.';
+            feedback.className = 'text-sm mt-2 text-red-600';
+            feedback.classList.remove('hidden');
+            return;
+        }
+
+        const res = await authFetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipient_id: parseInt(recipient_id), message })
+        });
+
+        if (res.ok) {
+            feedback.textContent = 'Aviso enviado correctamente.';
+            feedback.className = 'text-sm mt-2 text-green-600';
+            document.getElementById('message').value = '';
+        } else {
+            feedback.textContent = 'Error al enviar el aviso.';
+            feedback.className = 'text-sm mt-2 text-red-600';
+        }
+        feedback.classList.remove('hidden');
+    }
+
+    async function markRead(id) {
+        await authFetch(`/api/notifications/${id}/read`, { method: 'PUT' });
+        loadNotifications();
+        updateNotificationBadge();
+    }
+
+    async function markAllRead() {
+        await authFetch('/api/notifications/read-all', { method: 'PUT' });
+        loadNotifications();
+        updateNotificationBadge();
+    }
+
+    let deleteTargetId = null;
+
+    function deleteNotification(id) {
+        deleteTargetId = id;
+        document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        deleteTargetId = null;
+        document.getElementById('delete-modal').classList.add('hidden');
+    }
+
+    async function confirmDelete() {
+        if (!deleteTargetId) return;
+        await authFetch(`/api/notifications/${deleteTargetId}`, { method: 'DELETE' });
+        closeDeleteModal();
+        loadNotifications();
+        updateNotificationBadge();
+    }
+</script>
+{% endblock %}

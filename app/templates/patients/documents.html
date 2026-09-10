@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Santé - Documentos{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Documentos adjuntos</h1>
+            <p id="patient-name" class="text-sm text-gray-500"></p>
+        </div>
+        <a id="back-btn" href="#" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
+    </div>
+
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6">
+        <form id="upload-form" class="flex flex-col sm:flex-row gap-2 mb-4">
+            <input type="file" name="file" required class="text-sm flex-1">
+            <input type="text" name="description" placeholder="Descripción" class="border-2 border-sante-primary/40 rounded px-3 py-1 text-sm flex-1" required>
+            <button type="submit" class="bg-sante-primary text-white px-4 py-1 rounded text-sm hover:bg-sante-primary/90">Subir</button>
+        </form>
+        <div id="docs-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Consentimientos -->
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-800">Consentimientos</h2>
+            <button onclick="openConsentModal()" class="bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">+ Firmar</button>
+        </div>
+        <div id="consents-list"><p class="text-gray-400 text-sm">Cargando...</p></div>
+    </div>
+
+    <!-- Overlay generando documento -->
+    <div id="generating-overlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-4">
+            <div class="relative w-16 h-16">
+                <div class="absolute inset-0 rounded-full border-4 border-sante-primary/20"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-sante-primary animate-spin"></div>
+                <svg class="absolute inset-0 m-auto w-7 h-7 text-sante-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <p class="text-sm font-semibold text-gray-700">Generando documento...</p>
+            <p class="text-xs text-gray-400">Esto puede tardar unos segundos</p>
+        </div>
+    </div>
+
+    <!-- Modal revocar consentimiento -->
+    <div id="revoke-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-red-400 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 class="text-lg font-semibold text-red-700 mb-4">Revocar consentimiento</h2>
+            <form id="revoke-form" class="space-y-3">
+                <input type="hidden" id="rv-consent-id">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Nombre de quien revoca</label>
+                    <input type="text" id="rv-nombre" class="w-full border-2 border-red-300 rounded px-3 py-2 text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Observaciones</label>
+                    <textarea id="rv-observaciones" rows="2" class="w-full border-2 border-red-300 rounded px-3 py-2 text-sm"></textarea>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700">Revocar</button>
+                    <button type="button" onclick="document.getElementById('revoke-modal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal firmar consentimiento -->
+    <div id="consent-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Firmar consentimiento</h2>
+            <form id="consent-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Documento</label>
+                    <select id="cs-template" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required onchange="updateConsentFields()"></select>
+                </div>
+                <div id="cs-dni-box" class="hidden">
+                    <label class="block text-xs text-gray-500 mb-1">DNI/NIE del paciente</label>
+                    <input type="text" id="cs-dni-paciente" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Obligatorio para el documento">
+                </div>
+                <div id="cs-dynamic-fields"></div>
+                <hr class="my-2">
+                <p class="text-xs text-gray-500 font-medium">Tutor/representante (opcional)</p>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Nombre tutor</label>
+                    <input type="text" id="cs-tutor" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Relación con el paciente</label>
+                    <input type="text" id="cs-relacion" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Padre, madre, tutor legal...">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">DNI tutor</label>
+                    <input type="text" id="cs-tutor-dni" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Firmar</button>
+                    <button type="button" onclick="closeConsentModal()" class="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    const patientId = window.location.pathname.split('/')[2];
+    document.getElementById('back-btn').href = `/patients/${patientId}`;
+
+    async function loadDocs() {
+        const res = await authFetch(`/api/patients/${patientId}`);
+        const p = await res.json();
+        document.getElementById('patient-name').textContent = `${p.first_name} ${p.last_name}`;
+        renderDocs(p.documents);
+    }
+
+    function renderDocs(docs) {
+        const container = document.getElementById('docs-list');
+        if (!docs || docs.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-400">Sin documentos adjuntos</p>';
+            return;
+        }
+        container.innerHTML = docs.map(d => `
+            <div class="flex items-center justify-between border-b pb-2 text-sm">
+                <div>
+                    <p class="font-medium text-gray-800">${d.description || d.filename}</p>
+                    <p class="text-xs text-gray-400">${formatDate(d.uploaded_at)}</p>
+                </div>
+                <div class="flex gap-2">
+                    <a href="#" onclick="viewDoc(${d.id}); return false;" class="text-blue-600 hover:text-blue-400" title="Ver documento"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a>
+                    <button onclick="deleteDoc(${d.id})" class="text-red-500 hover:text-red-700" title="Eliminar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function viewDoc(docId) {
+        const token = getToken();
+        window.open(`/api/patients/${patientId}/documents/${docId}/view?token=${token}`, '_blank');
+    }
+
+    function deleteDoc(docId) {
+        showConfirm('Eliminar documento', '¿Estás seguro de que quieres eliminar este documento?', async () => {
+            await authFetch(`/api/patients/${patientId}/documents/${docId}`, { method: 'DELETE' });
+            loadDocs();
+        });
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const res = await authFetch(`/api/patients/${patientId}/documents`, { method: 'POST', body: formData });
+        if (res.ok) { e.target.reset(); loadDocs(); showToast('Documento subido'); }
+    });
+
+    loadDocs();
+
+    // --- Consentimientos ---
+    async function loadConsentTemplates() {
+        const res = await authFetch(`/api/documents/consent-templates?patient_id=${patientId}`);
+        const templates = await res.json();
+        const select = document.getElementById('cs-template');
+        if (!templates.length) {
+            select.innerHTML = '<option value="">Todos los consentimientos firmados</option>';
+            return;
+        }
+        select.innerHTML = templates.map(t => `<option value="${t.filename}">${t.name}</option>`).join('');
+    }
+
+    async function loadSignedConsents() {
+        const res = await authFetch(`/api/documents/all-consents/${patientId}`);
+        const consents = await res.json();
+        const container = document.getElementById('consents-list');
+        if (!consents.length) {
+            container.innerHTML = '<p class="text-gray-400 text-sm">No hay plantillas de consentimiento</p>';
+            return;
+        }
+        container.innerHTML = consents.map(c => {
+            let statusBadge, dateText, viewBtn, emailBtn, revokeBtn;
+            if (c.status === 'signed') {
+                statusBadge = '<span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">Vigente</span>';
+                dateText = formatDateTime(c.signed_at);
+                viewBtn = `<button onclick="viewConsent(${c.id})" class="text-blue-600 hover:text-blue-400" title="Ver PDF firmado"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>`;
+                emailBtn = `<button onclick="emailConsent(${c.id})" class="text-purple-600 hover:text-purple-400" title="Enviar por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>`;
+                revokeBtn = `<button onclick="openRevokeModal(${c.id})" class="text-red-500 hover:text-red-700" title="Revocar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg></button>`;
+            } else if (c.status === 'revoked') {
+                statusBadge = '<span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">Revocado</span>';
+                dateText = formatDateTime(c.revoked_at);
+                viewBtn = `<button onclick="viewRevocationPdf(${c.id})" class="text-blue-600 hover:text-blue-400" title="Ver PDF revocaci\u00f3n"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>`;
+                emailBtn = `<button onclick="emailConsent(${c.id})" class="text-purple-600 hover:text-purple-400" title="Enviar revocaci\u00f3n por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>`;
+                revokeBtn = `<button disabled class="text-gray-300 cursor-not-allowed" title="Ya revocado"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg></button>`;
+            } else {
+                statusBadge = '<span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">No firmado</span>';
+                dateText = '';
+                viewBtn = `<button onclick="viewTemplate('${c.filename}')" class="text-blue-600 hover:text-blue-400" title="Ver plantilla"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>`;
+                emailBtn = `<button onclick="emailTemplate('${c.filename}')" class="text-purple-600 hover:text-purple-400" title="Enviar plantilla por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>`;
+                revokeBtn = `<button disabled class="text-gray-300 cursor-not-allowed" title="Firme primero para poder revocar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg></button>`;
+            }
+            return `
+            <div class="flex items-center justify-between border-b pb-2 mb-2 text-sm">
+                <div>
+                    <p class="font-medium text-gray-800">${c.template_name}</p>
+                    <p class="text-xs text-gray-400">${dateText} ${statusBadge}</p>
+                </div>
+                <div class="flex gap-2 items-center">
+                    ${viewBtn}
+                    ${emailBtn}
+                    ${revokeBtn}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function viewTemplate(filename) {
+        authFetch(`/api/documents/consent-template-pdf/${encodeURIComponent(filename)}?_t=${Date.now()}`)
+            .then(r => { if (!r.ok) { showToast('Error al generar plantilla', 'error'); return; } return r.blob(); })
+            .then(blob => { if (!blob) return; window.open(URL.createObjectURL(blob), '_blank'); });
+    }
+
+    async function emailTemplate(filename) {
+        showToast('Funcionalidad de envío de plantilla en blanco no disponible aún', 'warning');
+    }
+
+    // Configuración de campos por plantilla
+    const TEMPLATE_FIELDS = {
+        'CI FISIOTERAPIA GENERAL.docx': [
+            { id: 'cs-fisio', label: 'Fisioterapeuta (nombre completo)', required: true },
+            { id: 'cs-fisio-dni', label: 'DNI fisioterapeuta', required: true },
+            { id: 'cs-unidad', label: 'Unidad de fisioterapia', required: true },
+        ],
+        'CI PUNCION SECA.docx': [
+            { id: 'cs-patologia', label: 'Patología del paciente', placeholder: 'Ej: Cervicalgia, lumbalgia...' },
+        ],
+    };
+
+    function updateConsentFields() {
+        const template = document.getElementById('cs-template').value;
+        const container = document.getElementById('cs-dynamic-fields');
+        const fields = TEMPLATE_FIELDS[template] || [];
+        if (!fields.length) { container.innerHTML = ''; return; }
+        container.innerHTML = fields.map(f => {
+            if (f.type === 'textarea') {
+                return `<div><label class="block text-xs text-gray-500 mb-1">${f.label}</label><textarea id="${f.id}" rows="2" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" ${f.placeholder ? `placeholder="${f.placeholder}"` : ''}></textarea></div>`;
+            }
+            return `<div><label class="block text-xs text-gray-500 mb-1">${f.label}</label><input type="text" id="${f.id}" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" ${f.required ? 'required' : ''} ${f.placeholder ? `placeholder="${f.placeholder}"` : ''}></div>`;
+        }).join('');
+    }
+
+    let patientData = null;
+    async function loadPatientData() {
+        const res = await authFetch(`/api/patients/${patientId}`);
+        patientData = await res.json();
+    }
+    loadPatientData();
+
+    async function openConsentModal() {
+        document.getElementById('consent-form').reset();
+        if (!patientData) await loadPatientData();
+        const dniBox = document.getElementById('cs-dni-box');
+        if (!patientData || !patientData.dni) {
+            dniBox.classList.remove('hidden');
+            document.getElementById('cs-dni-paciente').required = true;
+        } else {
+            dniBox.classList.add('hidden');
+            document.getElementById('cs-dni-paciente').required = false;
+        }
+        loadConsentTemplates().then(() => updateConsentFields());
+        document.getElementById('consent-modal').classList.remove('hidden');
+    }
+    function closeConsentModal() { document.getElementById('consent-modal').classList.add('hidden'); }
+
+    document.getElementById('consent-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const template = document.getElementById('cs-template').value;
+        const body = {
+            nombre_tutor: document.getElementById('cs-tutor').value || null,
+            relacion_tutor: document.getElementById('cs-relacion').value || null,
+            dni_tutor: document.getElementById('cs-tutor-dni').value || null,
+        };
+        // DNI paciente si no lo tiene en ficha
+        const dniInput = document.getElementById('cs-dni-paciente');
+        if (!patientData || !patientData.dni) {
+            if (!dniInput.value.trim()) { showToast('El DNI del paciente es obligatorio', 'error'); return; }
+            body.dni_paciente = dniInput.value.trim();
+        }
+        // Recoger campos dinámicos
+        const fields = TEMPLATE_FIELDS[template] || [];
+        const fieldMap = { 'cs-fisio': 'fisio_firma', 'cs-fisio-dni': 'dni_fisio_firma', 'cs-unidad': 'ud_fisioterapia', 'cs-observaciones': 'observaciones', 'cs-patologia': 'patologia_paciente' };
+        fields.forEach(f => { const el = document.getElementById(f.id); if (el) body[fieldMap[f.id] || f.id] = el.value || null; });
+        closeConsentModal();
+        document.getElementById('generating-overlay').classList.remove('hidden');
+        const res = await authFetch(`/api/documents/consent-sign/${patientId}?template=${encodeURIComponent(template)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        document.getElementById('generating-overlay').classList.add('hidden');
+        if (res.ok) {
+            showToast('Consentimiento firmado');
+            loadSignedConsents();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al firmar', 'error');
+        }
+    });
+
+    function viewConsent(id) {
+        authFetch(`/api/documents/signed-consents/${patientId}/${id}/pdf?_t=${Date.now()}`)
+            .then(r => { if (!r.ok) { showToast('PDF no disponible', 'error'); return; } return r.blob(); })
+            .then(blob => { if (!blob) return; window.open(URL.createObjectURL(blob), '_blank'); });
+    }
+
+    async function emailConsent(id) {
+        const res = await authFetch(`/api/documents/signed-consents/${patientId}/${id}/email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        if (res.ok) showToast('Email enviado');
+        else { const err = await res.json(); showToast(err.detail || 'Error', 'error'); }
+    }
+
+    function openRevokeModal(consentId) {
+        document.getElementById('rv-consent-id').value = consentId;
+        document.getElementById('rv-nombre').value = '';
+        document.getElementById('revoke-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('revoke-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const consentId = document.getElementById('rv-consent-id').value;
+        const nombre = document.getElementById('rv-nombre').value;
+        const observaciones = document.getElementById('rv-observaciones').value;
+        document.getElementById('revoke-modal').classList.add('hidden');
+        document.getElementById('generating-overlay').classList.remove('hidden');
+        const res = await authFetch(`/api/documents/consent-revoke/${patientId}/${consentId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre_revocante: nombre, observaciones_revoc: observaciones || null }),
+        });
+        document.getElementById('generating-overlay').classList.add('hidden');
+        if (res.ok) {
+            showToast('Consentimiento revocado');
+            loadSignedConsents();
+        } else {
+            const err = await res.json();
+            showToast(err.detail || 'Error al revocar', 'error');
+        }
+    });
+
+    function viewRevocationPdf(consentId) {
+        authFetch(`/api/documents/signed-consents/${patientId}/${consentId}/pdf?type=revocation&_t=${Date.now()}`)
+            .then(r => { if (!r.ok) { showToast('PDF no disponible', 'error'); return; } return r.blob(); })
+            .then(blob => { if (!blob) return; window.open(URL.createObjectURL(blob), '_blank'); });
+    }
+
+    loadSignedConsents();
+</script>
+{% endblock %}

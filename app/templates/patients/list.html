@@ -1,0 +1,164 @@
+﻿{% extends "base.html" %}
+{% block title %}Santé - Pacientes{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Pacientes</h1>
+    <a href="/patients/new" class="inline-block bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90 text-sm text-center">+ Nuevo paciente</a>
+</div>
+
+<div class="mb-4 flex flex-col sm:flex-row gap-3">
+    <input type="text" id="search-input" placeholder="Buscar por nombre, apellidos o teléfono..."
+        class="flex-1 border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sante-primary">
+    <div class="flex items-center gap-2">
+        <div id="toggle-container" class="flex items-center bg-white border-2 border-sante-primary/40 rounded-full p-0.5 cursor-pointer select-none" onclick="togglePending()">
+            <span id="toggle-all" class="px-3 py-1 rounded-full text-xs font-semibold bg-sante-primary text-white transition">Todos</span>
+            <span id="toggle-pending" class="px-3 py-1 rounded-full text-xs font-semibold text-gray-500 transition">Pagos pendientes</span>
+        </div>
+        <input type="checkbox" id="filter-pending" class="hidden">
+        <div id="toggle-inactive-container" class="flex items-center bg-white border-2 border-sante-primary/40 rounded-full p-0.5 cursor-pointer select-none hidden" onclick="toggleInactive()">
+            <span id="toggle-active" class="px-3 py-1 rounded-full text-xs font-semibold bg-sante-primary text-white transition">Activos</span>
+            <span id="toggle-inactive" class="px-3 py-1 rounded-full text-xs font-semibold text-gray-500 transition">No activos</span>
+        </div>
+        <input type="checkbox" id="filter-inactive" class="hidden">
+    </div>
+</div>
+
+<div id="patients-table" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-600">
+            <tr>
+                <th class="px-4 py-3 text-left">Nombre</th>
+                <th class="px-4 py-3 text-left hidden sm:table-cell">Teléfono</th>
+                <th class="px-4 py-3 text-left hidden md:table-cell">Email</th>
+                <th class="px-4 py-3 text-center">Alergias</th>
+                <th id="col-actions" class="px-4 py-3 text-center hidden">Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="patients-body"></tbody>
+    </table>
+</div>
+
+<div class="flex justify-center mt-4">
+    <div id="pagination" class="inline-flex gap-2 text-sm bg-white border-2 border-sante-primary/40 rounded-lg shadow p-3 hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (!checkAuth()) { window.location.href = '/login'; }
+    setupNav();
+
+    let currentPage = 1;
+    const searchInput = document.getElementById('search-input');
+    const filterPending = document.getElementById('filter-pending');
+    const filterInactive = document.getElementById('filter-inactive');
+    let searchTimeout;
+    const userRole = getRole();
+
+    // Mostrar toggle de inactivos solo para admin/recepción
+    if (userRole === 'ADMIN' || userRole === 'RECEPTION') {
+        document.getElementById('toggle-inactive-container').classList.remove('hidden');
+        document.getElementById('col-actions').classList.remove('hidden');
+    }
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => { currentPage = 1; loadPatients(); }, 300);
+    });
+
+    function togglePending() {
+        filterPending.checked = !filterPending.checked;
+        updateToggleStyle();
+        currentPage = 1;
+        loadPatients();
+    }
+
+    function toggleInactive() {
+        filterInactive.checked = !filterInactive.checked;
+        updateInactiveToggleStyle();
+        currentPage = 1;
+        loadPatients();
+    }
+
+    function updateToggleStyle() {
+        const all = document.getElementById('toggle-all');
+        const pending = document.getElementById('toggle-pending');
+        if (filterPending.checked) {
+            all.className = 'px-3 py-1 rounded-full text-xs font-semibold text-gray-500 transition';
+            pending.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-sante-primary text-white transition';
+        } else {
+            all.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-sante-primary text-white transition';
+            pending.className = 'px-3 py-1 rounded-full text-xs font-semibold text-gray-500 transition';
+        }
+    }
+
+    function updateInactiveToggleStyle() {
+        const active = document.getElementById('toggle-active');
+        const inactive = document.getElementById('toggle-inactive');
+        if (filterInactive.checked) {
+            active.className = 'px-3 py-1 rounded-full text-xs font-semibold text-gray-500 transition';
+            inactive.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-sante-primary text-white transition';
+        } else {
+            active.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-sante-primary text-white transition';
+            inactive.className = 'px-3 py-1 rounded-full text-xs font-semibold text-gray-500 transition';
+        }
+    }
+
+    filterPending.addEventListener('change', function() {
+        console.log('FILTER CHANGE - checked:', filterPending.checked);
+        currentPage = 1;
+        loadPatients();
+    });
+
+    function loadPatients() {
+        const q = searchInput.value.trim();
+        const pending = filterPending.checked ? 'true' : 'false';
+        const showInactive = filterInactive.checked ? 'true' : 'false';
+        const url = `/api/patients?page=${currentPage}&q=${encodeURIComponent(q)}&pending=${pending}&show_inactive=${showInactive}`;
+        authFetch(url)
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('patients-body');
+                const canDeactivate = userRole === 'ADMIN' || userRole === 'RECEPTION';
+                if (data.patients.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">No se encontraron pacientes</td></tr>';
+                } else {
+                    tbody.innerHTML = data.patients.map(p => `
+                        <tr class="border-t hover:bg-gray-50 cursor-pointer">
+                            <td class="px-4 py-3 font-medium" onclick="window.location.href='/patients/${p.id}'">${p.last_name}, ${p.first_name}</td>
+                            <td class="px-4 py-3 hidden sm:table-cell" onclick="window.location.href='/patients/${p.id}'">${p.phone}</td>
+                            <td class="px-4 py-3 hidden md:table-cell" onclick="window.location.href='/patients/${p.id}'">${p.email || '-'}</td>
+                            <td class="px-4 py-3 text-center" onclick="window.location.href='/patients/${p.id}'">${p.allergies ? '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-medium"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></span>' : '-'}</td>
+                            ${canDeactivate ? `<td class="px-4 py-3 text-center"><button onclick="event.stopPropagation(); togglePatient(${p.id}, ${p.is_active})" class="text-xs ${p.is_active ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'} hover:underline font-medium">${p.is_active ? 'Desactivar' : 'Reactivar'}</button></td>` : ''}
+                        </tr>
+                    `).join('');
+                }
+                renderPagination(data.page, data.pages);
+            });
+    }
+
+    function renderPagination(page, pages) {
+        const container = document.getElementById('pagination');
+        if (pages <= 1) { container.innerHTML = ''; container.classList.add('hidden'); return; }
+        container.classList.remove('hidden');
+        let html = '';
+        if (page > 1) html += `<button onclick="goPage(${page-1})" class="px-3 py-1 border rounded hover:bg-gray-100 inline-flex items-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>`;
+        html += `<span class="px-3 py-1">${page} / ${pages}</span>`;
+        if (page < pages) html += `<button onclick="goPage(${page+1})" class="px-3 py-1 border rounded hover:bg-gray-100 inline-flex items-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>`;
+        container.innerHTML = html;
+    }
+
+    function goPage(p) { currentPage = p; loadPatients(); }
+
+    async function togglePatient(id, isActive) {
+        const action = isActive ? 'Desactivar' : 'Reactivar';
+        showConfirm(action + ' paciente', '¿' + action + ' este paciente? ' + (isActive ? 'No aparecerá en la lista pero se conservan todos sus datos.' : 'Volverá a aparecer en la lista de pacientes activos.'), async () => {
+            await authFetch(`/api/patients/${id}/deactivate`, { method: 'PATCH' });
+            loadPatients();
+        });
+    }
+
+    loadPatients();
+</script>
+{% endblock %}
