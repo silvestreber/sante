@@ -165,14 +165,17 @@ Test note content
     aviso rojo si falta un USB. USB actual: SanDisk Cruzer Blade ~29 GB (28.6 GB, 27 libres).
   - `DESPLIEGUE.md`: política del USB y procedimiento completo de cambio de USB (lleno o reemplazo).
 
-- [ ] **4. BUG: error al generar documentos en la Raspberry**
-  CAUSA PROBABLE ya detectada en `app/consent_generator.py -> convert_docx_to_pdf()`: usa
-  `import pythoncom` + `docx2pdf`, que dependen de Microsoft Word vía COM y SOLO funcionan en Windows.
-  En Linux (Raspberry) fallan. Además `SIGNED_DOCS_PATH` por defecto es `"C:/PoC/documentos_firmados"`
-  (ruta Windows inexistente en la Pi). Sustituir la conversión docx->PDF por algo compatible con Linux
-  (p.ej. LibreOffice headless `soffice --convert-to pdf`) y corregir la ruta de salida por una
-  configurable (ver tarea 2). Las facturas/tratamientos usan FPDF (`app/pdf.py`), multiplataforma, así
-  que probablemente esas SÍ funcionen — verificar igualmente.
+- [x] **4. BUG: error al generar documentos en la Raspberry** — COMPLETADO
+  `convert_docx_to_pdf()` en `app/consent_generator.py` ahora es multiplataforma:
+  - En **Linux** (Raspberry): LibreOffice headless (`soffice --headless --convert-to pdf --outdir`,
+    con perfil de usuario temporal `-env:UserInstallation` y timeout 120s). LibreOffice ya estaba
+    instalado en la Pi (v25.2.3, `/usr/bin/soffice`). Probada la conversión real en la Pi: OK.
+  - En **Windows** (desarrollo): sigue usando docx2pdf/Word. `docx2pdf` marcado como dependencia
+    solo-Windows en `requirements.txt` (`; sys_platform == "win32"`).
+  - `_find_soffice()` localiza soffice/libreoffice (o `SOFFICE_BIN`) y da error claro si falta.
+  - La ruta de salida ya es configurable (resuelto en la tarea 2; el default Windows se corrigió allí).
+  - Facturas/tratamientos usan FPDF (multiplataforma), ya funcionaban. Esto desbloquea la FIRMA DE
+    CONSENTIMIENTOS y la generación de PDFs en blanco en la Pi.
 
 - [ ] **5. Carpeta compartida Mac ↔ USB de la Raspberry**
   Estudiar la viabilidad de una carpeta compartida en el Mac enlazada directamente con la unidad

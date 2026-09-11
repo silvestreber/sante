@@ -1,6 +1,10 @@
 """Genera documentos de consentimiento rellenando plantillas .docx con datos del paciente."""
 import os
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 from datetime import datetime, timezone, timedelta
 from docx import Document
 
@@ -154,7 +158,19 @@ def fill_consent_template(template_filename: str, data: dict, output_dir: str) -
 
 
 def convert_docx_to_pdf(docx_path: str) -> str:
-    """Convierte un docx a PDF. Devuelve la ruta del PDF."""
+    """Convierte un docx a PDF y devuelve la ruta del PDF.
+
+    Multiplataforma:
+    - En Linux (Raspberry Pi): usa LibreOffice headless (`soffice --convert-to pdf`).
+    - En Windows (desarrollo): usa docx2pdf (Microsoft Word vía COM).
+    """
+    if sys.platform.startswith("win"):
+        return _convert_docx_to_pdf_windows(docx_path)
+    return _convert_docx_to_pdf_libreoffice(docx_path)
+
+
+def _convert_docx_to_pdf_windows(docx_path: str) -> str:
+    """Conversión con Microsoft Word (solo Windows, entorno de desarrollo)."""
     import pythoncom
     pythoncom.CoInitialize()
     try:
@@ -164,6 +180,52 @@ def convert_docx_to_pdf(docx_path: str) -> str:
         return pdf_path
     finally:
         pythoncom.CoUninitialize()
+
+
+def _find_soffice() -> str:
+    """Localiza el ejecutable de LibreOffice. Lanza si no está instalado."""
+    exe = os.getenv("SOFFICE_BIN") or shutil.which("soffice") or shutil.which("libreoffice")
+    if not exe:
+        raise RuntimeError(
+            "LibreOffice no está instalado (no se encontró 'soffice' ni 'libreoffice'). "
+            "Instálalo con: sudo apt install libreoffice --no-install-recommends"
+        )
+    return exe
+
+
+def _convert_docx_to_pdf_libreoffice(docx_path: str) -> str:
+    """Conversión con LibreOffice headless (Linux/Raspberry Pi).
+
+    LibreOffice escribe el PDF con el mismo nombre base en `--outdir`. Usamos un
+    perfil de usuario temporal (`-env:UserInstallation`) para evitar conflictos si
+    hay varias conversiones a la vez o si el $HOME del servicio no es estándar.
+    """
+    exe = _find_soffice()
+    out_dir = os.path.dirname(os.path.abspath(docx_path))
+    expected_pdf = docx_path[:-len(".docx")] + ".pdf" if docx_path.endswith(".docx") else docx_path + ".pdf"
+
+    with tempfile.TemporaryDirectory(prefix="lo_profile_") as profile_dir:
+        cmd = [
+            exe,
+            f"-env:UserInstallation=file://{profile_dir}",
+            "--headless", "--norestore",
+            "--convert-to", "pdf",
+            "--outdir", out_dir,
+            docx_path,
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("LibreOffice tardó demasiado en convertir el documento (timeout 120s).")
+
+    if result.returncode != 0 or not os.path.exists(expected_pdf):
+        raise RuntimeError(
+            f"LibreOffice no pudo convertir el documento a PDF. "
+            f"Código: {result.returncode}. Salida: {result.stdout.strip()} {result.stderr.strip()}"
+        )
+    return expected_pdf
 
 
 def generate_signed_consent(template_filename: str, data: dict, output_dir: str) -> tuple[str, str]:
