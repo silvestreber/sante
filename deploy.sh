@@ -12,6 +12,16 @@
 #   7. Verifica que la app responde (healthcheck).
 #   8. Muestra un resumen final: OK o FALLO (con el detalle del error).
 #
+# ROLLBACK AUTOMÁTICO:
+#   Si el despliegue falla DESPUÉS de reiniciar el servicio (p.ej. la versión
+#   nueva no arranca y el healthcheck no responde), el script revierte solo:
+#   vuelve el código al commit anterior (git reset --hard), restaura la BD desde
+#   el backup previo (lo que además deshace cualquier migración aplicada) y
+#   reinicia el servicio con la versión antigua, verificando que responde.
+#   Si el fallo ocurre ANTES del reinicio (pull, deps o migraciones), el servicio
+#   antiguo sigue intacto y solo se revierte el código descargado; no hay rollback
+#   de BD porque nada se tocó en caliente.
+#
 # Uso:
 #   ./deploy.sh
 #
@@ -29,6 +39,7 @@ BACKUP_DIR="${PROJECT_DIR}/backups"
 HEALTH_URL="http://127.0.0.1:8000/login"
 PYTHON="${VENV_DIR}/bin/python"
 PIP="${VENV_DIR}/bin/pip"
+MAX_ATTEMPTS=20   # healthcheck: 20 intentos x 2s = hasta 40s de margen
 
 # --- Colores para legibilidad ---
 info()  { echo -e "\033[1;34m[deploy]\033[0m $*"; }
@@ -43,8 +54,69 @@ DEPLOY_PULLED="no"
 DEPS_INSTALLED="no"
 MIGRATIONS_OUTPUT=""
 
+# --- Puntos de restauración para el rollback automático ---
+REV_BEFORE=""        # commit git antes del pull (para revertir el código)
+RESTART_DONE="no"    # ¿ya se reinició el servicio con la versión nueva?
+ROLLBACK_DONE="no"   # evita rollback recursivo
+
 # Marca el paso actual (para saber qué falló si algo peta)
 step() { CURRENT_STEP="$1"; info "$1"; }
+
+# --- Rollback automático: revierte código + BD y reinicia el servicio ---
+# Solo tiene sentido cuando ya se tocó "en caliente" (reinicio con código nuevo).
+do_rollback() {
+  [ "${ROLLBACK_DONE}" = "sí" ] && return 0
+  ROLLBACK_DONE="sí"
+  echo
+  warn "--------------------------------------------------"
+  warn " INICIANDO ROLLBACK AUTOMÁTICO"
+  warn "--------------------------------------------------"
+
+  # 1. Revertir el código al commit anterior (si hubo pull).
+  if [ -n "${REV_BEFORE}" ]; then
+    warn " Revirtiendo código a ${REV_BEFORE:0:7} ..."
+    if git reset --hard "${REV_BEFORE}" >/dev/null 2>&1; then
+      ok " Código revertido a ${REV_BEFORE:0:7}."
+    else
+      err " No se pudo revertir el código con git reset --hard ${REV_BEFORE:0:7}."
+    fi
+  else
+    warn " No hay commit previo registrado; se omite la reversión de código."
+  fi
+
+  # 2. Restaurar la BD desde el backup previo (si existe).
+  if [ -n "${BACKUP_PATH}" ] && [ -f "${BACKUP_PATH}" ]; then
+    warn " Restaurando la base de datos desde el backup previo ..."
+    if cp "${BACKUP_PATH}" "${DB_FILE}"; then
+      ok " Base de datos restaurada desde ${BACKUP_PATH}."
+    else
+      err " No se pudo restaurar la BD desde ${BACKUP_PATH}."
+    fi
+  else
+    warn " No hay backup de BD para restaurar (¿primer despliegue?)."
+  fi
+
+  # 3. Reiniciar el servicio con la versión antigua ya restaurada.
+  warn " Reiniciando el servicio ${SERVICE_NAME} con la versión anterior ..."
+  sudo systemctl restart "${SERVICE_NAME}" || err " Fallo al reiniciar el servicio en el rollback."
+
+  # 4. Verificar que la versión antigua responde tras el rollback.
+  local code="000"
+  for attempt in $(seq 1 "${MAX_ATTEMPTS:-20}"); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}")" || code="000"
+    if [ "${code}" = "200" ] || [ "${code}" = "302" ]; then
+      ok " La versión anterior responde de nuevo (HTTP ${code})."
+      break
+    fi
+    sleep 2
+  done
+  if [ "${code}" != "200" ] && [ "${code}" != "302" ]; then
+    err " ATENCIÓN: la versión anterior NO responde tras el rollback (HTTP ${code})."
+    err " Requiere intervención manual. Revisa:"
+    err "   sudo journalctl -u ${SERVICE_NAME} --since '5 min ago'"
+  fi
+  warn "--------------------------------------------------"
+}
 
 # Manejador de fallo: se dispara ante cualquier error no controlado.
 on_error() {
@@ -57,8 +129,27 @@ on_error() {
   err " Código de error: ${exit_code}"
   if [ -n "${BACKUP_PATH}" ]; then
     err " Backup previo  : ${BACKUP_PATH}"
-    err " (puedes restaurar la BD desde ese fichero si hiciera falta)"
   fi
+
+  # Si el fallo ocurrió DESPUÉS de reiniciar el servicio (versión nueva ya activa),
+  # hacemos rollback automático. Si fue antes, el servicio antiguo sigue intacto.
+  if [ "${RESTART_DONE}" = "sí" ]; then
+    err " El servicio ya se había reiniciado con la versión nueva -> ROLLBACK."
+    do_rollback
+  else
+    warn " El fallo ocurrió antes de reiniciar el servicio."
+    warn " La versión ANTERIOR sigue en ejecución sin cambios; no hace falta rollback."
+    if [ -n "${REV_BEFORE}" ]; then
+      REV_NOW="$(git rev-parse HEAD 2>/dev/null || echo '')"
+      if [ -n "${REV_NOW}" ] && [ "${REV_NOW}" != "${REV_BEFORE}" ]; then
+        warn " Revirtiendo el código descargado para dejar el repo como estaba ..."
+        git reset --hard "${REV_BEFORE}" >/dev/null 2>&1 \
+          && ok " Código devuelto a ${REV_BEFORE:0:7}." \
+          || err " No se pudo revertir el código; hazlo manual: git reset --hard ${REV_BEFORE:0:7}"
+      fi
+    fi
+  fi
+
   err " Revisa los logs del servicio con:"
   err "   sudo journalctl -u ${SERVICE_NAME} --since '5 min ago'"
   err "=================================================="
@@ -93,7 +184,7 @@ step "3/7 Descargar código del repositorio"
 REQ_HASH_BEFORE="$(sha1sum requirements.txt 2>/dev/null | awk '{print $1}' || true)"
 git fetch --prune origin
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-REV_BEFORE="$(git rev-parse HEAD)"
+REV_BEFORE="$(git rev-parse HEAD)"   # punto de restauración para el rollback
 git pull --ff-only origin "${CURRENT_BRANCH}"
 REV_AFTER="$(git rev-parse HEAD)"
 if [ "${REV_BEFORE}" != "${REV_AFTER}" ]; then
@@ -125,13 +216,13 @@ ok "Migraciones al día."
 # --- 6. Reiniciar el servicio ---
 step "6/7 Reiniciar el servicio ${SERVICE_NAME}"
 sudo systemctl restart "${SERVICE_NAME}"
+RESTART_DONE="sí"   # a partir de aquí, un fallo dispara ROLLBACK automático
 
 # --- 7. Healthcheck (con reintentos: la Raspberry puede tardar en arrancar) ---
 step "7/7 Healthcheck"
 HTTP_CODE="000"
-MAX_ATTEMPTS=20   # 20 intentos x 2s = hasta 40s de margen
 for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
-  HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}" || echo '000')"
+  HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}")" || HTTP_CODE="000"
   if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "302" ]; then
     ok "App lista tras ${attempt} intento(s) (HTTP ${HTTP_CODE})."
     break
@@ -140,7 +231,7 @@ for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
   sleep 2
 done
 if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "302" ]; then
-  err "La app no respondió tras ${MAX_ATTEMPTS} intentos (HTTP ${HTTP_CODE})."
+  err "La app (versión nueva) no respondió tras ${MAX_ATTEMPTS} intentos (HTTP ${HTTP_CODE})."
   CURRENT_STEP="7/7 Healthcheck (HTTP ${HTTP_CODE})"
   false
 fi
