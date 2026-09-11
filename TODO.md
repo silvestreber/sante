@@ -187,6 +187,38 @@ Test note content
   (son datos de salud): acceso solo en red local, credenciales, permisos de usuario `silver`, y que
   NO se rompa el enlace `media-usb.mount` ni los permisos que la app necesita para escribir.
 
+- [ ] **6. Firma manuscrita de consentimientos (en tablet/móvil/ratón)**
+  Objetivo: poder firmar FÍSICAMENTE el consentimiento en el mismo acto, capturando la firma en un
+  recuadro y estampándola en el PDF. El uso principal será con tablet (firma con el dedo), pero debe
+  funcionar también con ratón (escritorio) y en móvil.
+
+  Contexto del flujo actual (ya implementado):
+  - Al firmar un consentimiento se abre un modal que pide los datos que requiere cada plantilla
+    (endpoint `/api/documents/consent-templates`; firma en `POST /api/documents/consent-sign/{patient_id}`).
+  - `app/consent_generator.py`: `fill_consent_template()` rellena la plantilla `.docx` con los datos
+    (marcadores `{{...}}`), y `generate_signed_consent()` convierte a PDF (LibreOffice en Linux, tarea 4).
+    El PDF se guarda en el USB con nombre único y su ruta relativa en `SignedConsent.pdf_path`.
+
+  Qué añadir:
+  1. **Recuadro de firma en el modal**: un `<canvas>` HTML donde el paciente firme con el dedo
+     (eventos touch/pointer) o con el ratón. Botones "Borrar" y confirmar. Capturar la firma como
+     imagen PNG (base64, fondo transparente o blanco). Valorar librería ligera tipo signature_pad
+     (sin dependencias) frente a implementación propia con la Canvas API.
+  2. **Enviar la firma al backend** junto con el resto de datos del formulario (campo con el PNG en
+     base64). Ampliar el schema de firma (`ConsentSignRequest` en `app/routers/documents.py`).
+  3. **Estampar la firma en el PDF**, SIEMPRE en la misma posición (al final del documento) y al mismo
+     tamaño, independientemente del contenido. Decidir enfoque técnico:
+     - Opción A: insertar la imagen en el `.docx` (python-docx) en un marcador de firma reservado
+       antes de convertir a PDF. Requiere que las plantillas tengan un hueco/marcador de firma.
+     - Opción B: generar el PDF como ahora y luego estampar la imagen en la última página con una
+       librería PDF (p.ej. pypdf + reportlab, o pdf overlay). Más control de posición/tamaño exacto,
+       independiente de la plantilla. Probablemente la más robusta para "siempre mismo tamaño y sitio".
+     Definir tamaño fijo del recuadro de firma (p.ej. ancho x alto en mm) y su posición (margen inferior).
+  4. **Consideraciones**: la firma es un dato personal sensible -> va al USB dentro del PDF, no se
+     guarda la imagen suelta. Mantener compatibilidad con el flujo sin firma (algunos documentos podrían
+     firmarse en papel). Verificar que el estampado funciona en la Pi (Linux) end-to-end.
+  5. Añadir dependencias nuevas a `requirements.txt` si hacen falta (reportlab/pypdf, multiplataforma).
+
 ## Reglas de trabajo
 
 - No ejecutar nada destructivo. Backup del `.db` y de los PDFs antes de tocar producción.
