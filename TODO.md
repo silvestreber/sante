@@ -152,12 +152,18 @@ Test note content
     sección B.13). Se cambió el default Windows de las rutas (relacionado con el bug de la tarea 4).
   Verificado en local: tests auth (6/6) y billing (16/16) OK; flujo de rutas probado end-to-end.
 
-- [ ] **3. Política de la app respecto al USB externo**
-  Documentar y, si hace falta, mejorar el comportamiento cuando:
-  - el USB NO está enchufado al arrancar (hoy `sante.service` depende de `media-usb.mount`, así que
-    la app NO arranca sin USB — confirmar y decidir si es lo deseado).
-  - el USB se desenchufa con la app funcionando (escrituras, errores, integridad de datos).
-  Incluir cómo consultar la capacidad máxima del USB actual para comprar otro igual o mayor.
+- [x] **3. Política de la app respecto al USB externo** — COMPLETADO
+  Política decidida e implementada: la app **solo escribe en el USB**; si el punto de montaje no
+  está activo, devuelve un error controlado (HTTP 503) y NO escribe nada (nunca en la SD).
+  - `storage.py`: `is_mounted`/`requires_mount`/`StorageUnavailableError`; `get_base_path` exige
+    USB montado antes de escribir (verificado en la Pi: ruta real montada=True, ruta fantasma=False).
+  - Handler global 503 en `main.py` con mensaje claro. En facturas se comprueba ANTES de tocar la BD
+    (no se crean registros sin PDF).
+  - Correción sobre lo que creíamos: el servicio usa `Wants=media-usb.mount` (no `Requires=`) y el
+    fstab usa `nofail`, así que **la app SÍ arranca sin USB**; solo se bloquea guardar documentos.
+  - Indicador en Configuración > Almacenamiento: estado montado/no conectado, capacidad libre/total,
+    aviso rojo si falta un USB. USB actual: SanDisk Cruzer Blade ~29 GB (28.6 GB, 27 libres).
+  - `DESPLIEGUE.md`: política del USB y procedimiento completo de cambio de USB (lleno o reemplazo).
 
 - [ ] **4. BUG: error al generar documentos en la Raspberry**
   CAUSA PROBABLE ya detectada en `app/consent_generator.py -> convert_docx_to_pdf()`: usa
