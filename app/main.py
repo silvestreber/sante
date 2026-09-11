@@ -60,6 +60,23 @@ app.include_router(waitlist.router)
 app.include_router(backup.router)
 
 
+from app.storage import StorageUnavailableError
+
+
+@app.exception_handler(StorageUnavailableError)
+async def storage_unavailable_handler(request: Request, exc: StorageUnavailableError):
+    """El USB no está disponible: no se pudo guardar el fichero. Devolvemos 503
+    con un mensaje claro para el usuario (nada se ha escrito en la SD)."""
+    logging.error(f"{request.method} {request.url} - StorageUnavailableError: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": (
+            "El almacenamiento externo (USB) no está disponible. No se ha guardado nada. "
+            "Comprueba que el USB está conectado y montado, y vuelve a intentarlo."
+        )},
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logging.error(f"{request.method} {request.url} - {exc}", exc_info=True)

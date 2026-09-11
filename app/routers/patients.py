@@ -21,7 +21,7 @@ def _doc_abs_path(db: Session, doc: PatientDocument) -> str | None:
         return None
     if os.path.isabs(doc.filepath):
         return doc.filepath  # compatibilidad con datos antiguos
-    return abs_path(get_patient_docs_path(db, ensure=False), doc.filepath)
+    return abs_path(get_patient_docs_path(db, ensure=False, check_mount=False), doc.filepath)
 
 from dotenv import load_dotenv
 

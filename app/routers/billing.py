@@ -26,13 +26,20 @@ EXCEL_TEMPLATE_GLOB = os.path.join(os.path.dirname(__file__), "..", "..", "Eugen
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 
+def _ensure_storage_available(db: Session) -> None:
+    """Comprueba que el almacenamiento de facturas (USB) está disponible ANTES de
+    tocar la BD. Si no lo está, lanza StorageUnavailableError (-> 503) y no se
+    crea/modifica ningún registro, evitando facturas sin PDF."""
+    get_invoices_path(db)  # lanza StorageUnavailableError si el USB no está montado
+
+
 def _invoice_pdf_abs(db: Session, invoice: "Invoice") -> str | None:
     """Ruta absoluta del PDF de una factura, o None si no tiene fichero asociado."""
     if not invoice.pdf_filename:
         return None
     if os.path.isabs(invoice.pdf_filename):
         return invoice.pdf_filename  # compatibilidad con datos antiguos
-    return abs_path(get_invoices_path(db, ensure=False), invoice.pdf_filename)
+    return abs_path(get_invoices_path(db, ensure=False, check_mount=False), invoice.pdf_filename)
 
 
 def _delete_invoice_pdf(db: Session, invoice: "Invoice") -> None:
@@ -183,6 +190,7 @@ def create_invoice(
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
+    _ensure_storage_available(db)  # el USB debe estar montado antes de crear la factura
 
     invoice = Invoice(
         patient_id=data.patient_id,
@@ -238,6 +246,7 @@ def update_invoice(
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
+    _ensure_storage_available(db)  # el USB debe estar montado antes de regenerar el PDF
 
     was_paid = invoice.is_paid
 
@@ -331,6 +340,7 @@ def delete_invoice(
 
     # Si está asociado a una cita o bono, marcar como no pagado (queda pendiente)
     if invoice.appointment_id or invoice.session_pack_id:
+        _ensure_storage_available(db)  # el USB debe estar montado antes de regenerar el PDF
         invoice.is_paid = False
         invoice.payment_method = None
         db.commit()
@@ -473,17 +483,22 @@ def update_pack(
     pack = db.query(SessionPack).filter(SessionPack.id == pack_id).first()
     if not pack:
         raise HTTPException(status_code=404, detail="Bono no encontrado")
-    pack.total_sessions = data.total_sessions
-    pack.price = data.price
-    pack.expires_at = date.fromisoformat(data.expires_at) if data.expires_at else None
-    db.commit()
 
-    # Actualizar factura, ingreso y regenerar PDF si cambió el precio
+    # Si hay que regenerar el PDF de la factura (cambió el precio de un bono pagado),
+    # el USB debe estar montado ANTES de tocar nada, para no dejar datos inconsistentes.
     invoice = db.query(Invoice).filter(
         Invoice.session_pack_id == pack_id,
         Invoice.is_paid == True,
         Invoice.payment_method.isnot(None),
     ).first()
+    if invoice and invoice.amount != data.price:
+        _ensure_storage_available(db)
+
+    pack.total_sessions = data.total_sessions
+    pack.price = data.price
+    pack.expires_at = date.fromisoformat(data.expires_at) if data.expires_at else None
+    db.commit()
+
     if invoice and invoice.amount != data.price:
         invoice.amount = data.price
         db.commit()

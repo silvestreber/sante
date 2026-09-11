@@ -588,18 +588,41 @@ def _human_gb(num_bytes: int) -> float:
 
 @router.get("/storage-paths")
 def get_storage_paths(db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
-    """Devuelve las rutas de almacenamiento configuradas y el espacio libre de cada una."""
+    """Devuelve las rutas de almacenamiento configuradas, su estado de montaje y espacio."""
+    import shutil
     result = []
     for key in storage.STORAGE_KEYS:
-        path = storage.get_base_path(db, key, ensure=False)
-        free = storage.free_space_bytes(path)
+        # resolve_base_path NO comprueba montaje: así el estado se muestra siempre,
+        # aunque el USB esté desconectado.
+        path = storage.resolve_base_path(db, key)
+        needs_mount = storage.requires_mount(path)
+        mounted = storage.is_mounted(path)
+        free_gb = total_gb = None
+        # Solo consultamos capacidad si la ruta es utilizable (existe o está montada).
+        if not needs_mount or mounted:
+            try:
+                probe = path
+                while probe and not os.path.exists(probe):
+                    parent = os.path.dirname(probe)
+                    if parent == probe:
+                        break
+                    probe = parent
+                if probe and os.path.exists(probe):
+                    usage = shutil.disk_usage(probe)
+                    free_gb = _human_gb(usage.free)
+                    total_gb = _human_gb(usage.total)
+            except OSError:
+                pass
         result.append({
             "key": key,
             "label": storage.STORAGE_LABELS[key],
             "path": path,
-            "free_gb": _human_gb(free),
+            "requires_mount": needs_mount,
+            "mounted": mounted,
+            "free_gb": free_gb,
+            "total_gb": total_gb,
             "exists": os.path.isdir(path),
-            "file_count": len(storage.list_files(path)),
+            "file_count": len(storage.list_files(path)) if (not needs_mount or mounted) else 0,
         })
     return {"paths": result, "service": SERVICE_NAME}
 

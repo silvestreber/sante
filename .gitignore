@@ -31,6 +31,7 @@ uploads/*
 !uploads/.gitkeep
 app/static/invoices/*.pdf
 app/static/docs/blank_pdfs/*.pdf
+app/static/docs/blank_pdfs/*.docx
 documentos_firmados/
 
 # --- Ficheros de datos reales del cliente (NO SUBIR) ---

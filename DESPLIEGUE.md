@@ -453,3 +453,88 @@ se llene). Al cambiar una ruta:
 
 Los valores iniciales de estas rutas los siembra la migración `0002_storage_paths`
 (apuntando a `/media/usb/...`). El log de errores **no** es configurable: siempre en la SD.
+
+## Política del USB externo (qué pasa si falta)
+
+La app **solo escribe documentos en el USB**, nunca en la tarjeta SD. Comportamiento:
+
+- **Si el USB no está montado** (no conectado, o desconectado en caliente): al intentar
+  guardar un consentimiento, factura o documento de paciente, la app **devuelve un error
+  claro y no guarda nada** (no escribe en la SD por error). El resto de la app sigue
+  funcionando (agenda, consultas, etc.), porque la base de datos vive en la SD.
+- El estado del USB (montado / no conectado) y su capacidad se ven en
+  **Configuración > Almacenamiento**. Si algún USB no está, aparece un aviso en rojo.
+- El arranque del sistema y del servicio **no** se bloquea si el USB falta (el montaje usa
+  `nofail` y el servicio usa `Wants=`, no `Requires=`). La app arranca; solo se bloquea
+  guardar documentos hasta que el USB vuelva.
+
+Comprobar el estado del USB desde consola:
+
+```bash
+systemctl status media-usb.mount --no-pager
+df -h /media/usb                                  # capacidad y uso
+lsblk -o NAME,SIZE,FSTYPE,LABEL,MODEL /dev/sda    # modelo y tamaño del USB
+```
+
+## Cambiar el USB (porque está lleno o se quiere sustituir)
+
+Procedimiento seguro para pasar a un USB nuevo sin perder documentos. La idea: montar el
+nuevo USB en un punto temporal, dejar que la **app mueva los ficheros** (con sus
+comprobaciones de espacio y colisiones), y finalmente dejar el nuevo USB como `/media/usb`.
+
+> **Antes de empezar:** ten a mano el USB nuevo (igual o mayor capacidad que el actual;
+> el actual es un SanDisk de ~29 GB, así que 32 GB o más). Hazlo en un momento sin actividad
+> en la clínica. Los datos de la BD (`sante.db`) están en la SD y no se tocan.
+
+### Opción recomendada: mover con la app, luego sustituir el punto de montaje
+
+1. **Conecta el USB nuevo** (además del actual). Identifícalo:
+   ```bash
+   lsblk -o NAME,SIZE,FSTYPE,LABEL,MODEL
+   ```
+   El actual es `/dev/sda1` (montado en `/media/usb`). El nuevo aparecerá como `/dev/sdb`.
+
+2. **Formatéalo en ext4 y dale una etiqueta** (¡BORRA el contenido del USB nuevo!):
+   ```bash
+   sudo umount /dev/sdb1 2>/dev/null
+   sudo mkfs.ext4 -L SANTE_USB2 /dev/sdb1
+   ```
+
+3. **Móntalo en un punto temporal** y da permisos a `silver`:
+   ```bash
+   sudo mkdir -p /media/usb_nuevo
+   sudo mount /dev/sdb1 /media/usb_nuevo
+   sudo chown -R silver:silver /media/usb_nuevo
+   ```
+
+4. **Desde la app** (Configuración > Almacenamiento), cambia cada categoría de
+   `/media/usb/...` a `/media/usb_nuevo/...` (p.ej. `/media/usb_nuevo/facturas`). La app
+   moverá los ficheros de forma segura (copiar-verificar-borrar) y avisará si hay
+   colisiones o falta espacio. Pulsa **Reiniciar servicio** cuando termine.
+
+5. **Verifica** que los ficheros están en el USB nuevo y que la app los ve. Cuando estés
+   seguro, ya puedes retirar el USB antiguo.
+
+6. **(Opcional pero recomendado) Dejar el USB nuevo como `/media/usb` permanente**, para no
+   depender del punto temporal. Con la app parada un momento:
+   ```bash
+   # Obtener el UUID del USB nuevo
+   sudo blkid /dev/sdb1
+   # Editar fstab: sustituir el UUID viejo por el nuevo en la línea de /media/usb
+   sudo nano /etc/fstab
+   ```
+   Cambia la línea existente para que el UUID nuevo se monte en `/media/usb`, retira la
+   línea/punto temporal, y aplica:
+   ```bash
+   sudo systemctl stop sante
+   sudo umount /media/usb /media/usb_nuevo 2>/dev/null
+   sudo mount -a
+   df -h /media/usb          # debe mostrar el USB nuevo
+   ```
+   Finalmente, desde la app vuelve a poner las rutas a `/media/usb/...` y reinicia el
+   servicio. Así vuelves al punto de montaje estándar con el disco nuevo.
+
+> **Regla de oro:** no borres nada del USB antiguo hasta haber verificado que todos los
+> documentos están en el nuevo y la app los abre correctamente. El movimiento de la app ya
+> es seguro (no borra el origen hasta verificar la copia), pero una comprobación visual extra
+> nunca sobra tratándose de datos de pacientes.

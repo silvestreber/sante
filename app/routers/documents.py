@@ -23,7 +23,7 @@ def _consent_abs_path(db: Session, relative_name: str | None) -> str | None:
     # Compatibilidad: si en BD hubiera una ruta absoluta antigua, respetarla.
     if os.path.isabs(relative_name):
         return relative_name
-    return abs_path(get_signed_docs_path(db, ensure=False), relative_name)
+    return abs_path(get_signed_docs_path(db, ensure=False, check_mount=False), relative_name)
 from app.pdf import (
     generate_attendance_pdf,
     generate_consent_pdf,

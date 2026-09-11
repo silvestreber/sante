@@ -30,6 +30,12 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Config
 
+
+class StorageUnavailableError(Exception):
+    """El almacenamiento (USB) no está disponible: su punto de montaje no está
+    activo. Se lanza para impedir escribir en la SD por error."""
+
+
 # --- Claves de configuración en la tabla Config ---
 KEY_SIGNED_DOCS = "storage_signed_docs_path"
 KEY_INVOICES = "storage_invoices_path"
@@ -60,6 +66,55 @@ def _is_windows() -> bool:
     return sys.platform.startswith("win")
 
 
+# Directorios bajo los que una ruta se considera "almacenamiento externo" que
+# DEBE estar montado (USB). Configurable por entorno si algún día cambia.
+_MOUNT_ROOTS = tuple(
+    p.strip() for p in os.getenv("STORAGE_MOUNT_ROOTS", "/media,/mnt").split(",") if p.strip()
+)
+# Permite desactivar la comprobación de montaje (p.ej. si se usa disco interno).
+_REQUIRE_MOUNT = os.getenv("STORAGE_REQUIRE_MOUNT", "1") not in ("0", "false", "False", "")
+
+
+def find_mountpoint(path: str) -> str:
+    """Devuelve el punto de montaje del sistema de ficheros que contiene `path`.
+
+    Sube por los directorios padre hasta encontrar uno que sea punto de montaje.
+    Funciona aunque `path` todavía no exista (usa el ancestro existente).
+    """
+    p = os.path.abspath(path)
+    while not os.path.ismount(p):
+        parent = os.path.dirname(p)
+        if parent == p:  # llegamos a la raíz
+            return p
+        p = parent
+    return p
+
+
+def requires_mount(path: str) -> bool:
+    """True si `path` debe residir en un punto de montaje externo (USB).
+
+    En Windows (desarrollo) nunca se exige. En Linux, se exige si la ruta cuelga
+    de alguno de los directorios de montaje configurados (/media, /mnt)."""
+    if _is_windows() or not _REQUIRE_MOUNT:
+        return False
+    ap = os.path.abspath(path)
+    return any(ap == root or ap.startswith(root + os.sep) for root in _MOUNT_ROOTS)
+
+
+def is_mounted(path: str) -> bool:
+    """True si la ruta está sobre un punto de montaje real.
+
+    Para rutas que requieren montaje (USB), comprueba que exista un mountpoint
+    ancestro DENTRO del árbol de montaje (p.ej. /media/usb), no la raíz `/`.
+    Para rutas que no requieren montaje, siempre True."""
+    if not requires_mount(path):
+        return True
+    mp = find_mountpoint(path)
+    # El mountpoint debe ser un subdirectorio real de /media o /mnt (p.ej.
+    # /media/usb). Si acaba en "/" o en el propio /media, el USB no está montado.
+    return any(mp.startswith(root + os.sep) for root in _MOUNT_ROOTS)
+
+
 def _default_path(key: str) -> str:
     """Valor por defecto según el SO. En Linux (Raspberry) todo al USB salvo logs."""
     if _is_windows():
@@ -84,20 +139,37 @@ def _default_path(key: str) -> str:
 # Resolución de rutas base
 # =====================================================================
 
-def get_base_path(db: Session, key: str, *, ensure: bool = True) -> str:
-    """Devuelve la ruta base de una categoría (Config -> env -> default por SO).
-
-    Si `ensure` es True, crea el directorio si no existe.
-    """
+def resolve_base_path(db: Session, key: str) -> str:
+    """Resuelve la ruta base configurada (Config -> env -> default por SO),
+    SIN comprobar montaje ni crear directorios."""
     if key not in STORAGE_KEYS:
         raise ValueError(f"Clave de almacenamiento desconocida: {key}")
-
     row = db.query(Config).filter(Config.key == key).first()
     value = (row.value.strip() if row and row.value else "") or ""
     if not value:
         value = os.getenv(_ENV_VAR[key], "").strip()
     if not value:
         value = _default_path(key)
+    return value
+
+
+def get_base_path(db: Session, key: str, *, ensure: bool = True, check_mount: bool = True) -> str:
+    """Devuelve la ruta base de una categoría.
+
+    - `check_mount` (por defecto True): si la ruta debe estar en un USB y su punto
+      de montaje NO está activo, lanza StorageUnavailableError y NO crea nada.
+      Así nunca se escribe en la SD por error. Poner a False para consultas de
+      estado o lecturas que no deban fallar.
+    - `ensure` (por defecto True): crea el directorio si no existe (solo tras
+      pasar la comprobación de montaje).
+    """
+    value = resolve_base_path(db, key)
+
+    if check_mount and requires_mount(value) and not is_mounted(value):
+        raise StorageUnavailableError(
+            f"El almacenamiento externo (USB) no está disponible: '{value}' no está "
+            f"montado. No se guardará nada para evitar escribir en la tarjeta SD."
+        )
 
     if ensure:
         os.makedirs(value, exist_ok=True)
@@ -117,25 +189,28 @@ def set_base_path(db: Session, key: str, value: str) -> None:
 
 
 def get_all_base_paths(db: Session, *, ensure: bool = False) -> dict[str, str]:
-    """Devuelve todas las rutas base configuradas, indexadas por clave."""
-    return {key: get_base_path(db, key, ensure=ensure) for key in STORAGE_KEYS}
+    """Devuelve todas las rutas base configuradas, indexadas por clave.
+    No comprueba montaje (uso informativo)."""
+    return {key: resolve_base_path(db, key) for key in STORAGE_KEYS}
 
 
-# Atajos por categoría (crean el directorio por defecto).
-def get_signed_docs_path(db: Session, *, ensure: bool = True) -> str:
-    return get_base_path(db, KEY_SIGNED_DOCS, ensure=ensure)
+# Atajos por categoría. Por defecto exigen que el USB esté montado (check_mount=True)
+# y crean el directorio. Para lecturas/estado que no deban fallar, pasar
+# check_mount=False y ensure=False.
+def get_signed_docs_path(db: Session, *, ensure: bool = True, check_mount: bool = True) -> str:
+    return get_base_path(db, KEY_SIGNED_DOCS, ensure=ensure, check_mount=check_mount)
 
 
-def get_invoices_path(db: Session, *, ensure: bool = True) -> str:
-    return get_base_path(db, KEY_INVOICES, ensure=ensure)
+def get_invoices_path(db: Session, *, ensure: bool = True, check_mount: bool = True) -> str:
+    return get_base_path(db, KEY_INVOICES, ensure=ensure, check_mount=check_mount)
 
 
-def get_patient_docs_path(db: Session, *, ensure: bool = True) -> str:
-    return get_base_path(db, KEY_PATIENT_DOCS, ensure=ensure)
+def get_patient_docs_path(db: Session, *, ensure: bool = True, check_mount: bool = True) -> str:
+    return get_base_path(db, KEY_PATIENT_DOCS, ensure=ensure, check_mount=check_mount)
 
 
-def get_auto_backup_path(db: Session, *, ensure: bool = True) -> str:
-    return get_base_path(db, KEY_AUTO_BACKUP, ensure=ensure)
+def get_auto_backup_path(db: Session, *, ensure: bool = True, check_mount: bool = True) -> str:
+    return get_base_path(db, KEY_AUTO_BACKUP, ensure=ensure, check_mount=check_mount)
 
 
 # =====================================================================

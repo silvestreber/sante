@@ -279,6 +279,9 @@
             <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
                 Al cambiar una ubicación, los ficheros existentes se moverán a la nueva carpeta y hará falta <strong>reiniciar el servicio</strong> para que el cambio surta efecto. El cambio solo se guarda si el traslado se completa sin errores.
             </p>
+            <p id="storage-unmounted-warning" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mt-3">
+                <strong>Atención:</strong> hay almacenamiento externo (USB) que no está conectado. Mientras el USB no esté disponible, <strong>no se podrán guardar documentos ni facturas</strong> (la app avisará al intentarlo). Conecta el USB y comprueba que aparece como "montado".
+            </p>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -286,8 +289,9 @@
                     <tr>
                         <th class="text-left px-3 py-2">Categoría</th>
                         <th class="text-left px-3 py-2">Ruta actual</th>
+                        <th class="text-left px-3 py-2">Estado</th>
                         <th class="text-left px-3 py-2">Ficheros</th>
-                        <th class="text-left px-3 py-2">Espacio libre</th>
+                        <th class="text-left px-3 py-2">Espacio</th>
                         <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
@@ -837,19 +841,38 @@ async function loadStoragePaths() {
     const data = await res.json();
     const body = document.getElementById('storage-body');
     body.innerHTML = '';
+    let anyUnmounted = false;
     data.paths.forEach(p => {
+        // Estado de montaje
+        let estado;
+        if (!p.requires_mount) {
+            estado = '<span class="text-gray-500">Local (SD)</span>';
+        } else if (p.mounted) {
+            estado = '<span class="inline-flex items-center gap-1 text-green-700"><span class="w-2 h-2 rounded-full bg-green-500"></span>USB montado</span>';
+        } else {
+            anyUnmounted = true;
+            estado = '<span class="inline-flex items-center gap-1 text-red-700 font-medium"><span class="w-2 h-2 rounded-full bg-red-500"></span>USB no conectado</span>';
+        }
+        // Espacio (libre / total) o guion si no disponible
+        const espacio = (p.free_gb != null && p.total_gb != null)
+            ? `${p.free_gb} / ${p.total_gb} GB`
+            : '<span class="text-gray-400">—</span>';
         const tr = document.createElement('tr');
         tr.className = 'border-t';
         tr.innerHTML = `
             <td class="px-3 py-2 font-medium text-gray-700">${p.label}</td>
-            <td class="px-3 py-2 text-gray-600 break-all">${p.path}${p.exists ? '' : ' <span class="text-amber-600 text-xs">(no existe aún)</span>'}</td>
+            <td class="px-3 py-2 text-gray-600 break-all">${p.path}${(p.exists || !p.requires_mount) ? '' : ''}</td>
+            <td class="px-3 py-2">${estado}</td>
             <td class="px-3 py-2 text-gray-600">${p.file_count}</td>
-            <td class="px-3 py-2 text-gray-600">${p.free_gb} GB</td>
+            <td class="px-3 py-2 text-gray-600">${espacio}</td>
             <td class="px-3 py-2 text-right">
                 <button class="text-sante-primary hover:underline text-sm" onclick="openStorageModal('${p.key}', ${JSON.stringify(p.path).replace(/"/g,'&quot;')}, ${JSON.stringify(p.label).replace(/"/g,'&quot;')})">Cambiar</button>
             </td>`;
         body.appendChild(tr);
     });
+    // Aviso global si algún USB no está conectado
+    const warn = document.getElementById('storage-unmounted-warning');
+    if (warn) warn.classList.toggle('hidden', !anyUnmounted);
 }
 
 function openStorageModal(key, path, label) {
