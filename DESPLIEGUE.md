@@ -326,6 +326,35 @@ sudo ufw enable
 Opcional: acceso SSH solo con clave (`ssh-copy-id` desde tu PC y luego
 `PasswordAuthentication no` en `/etc/ssh/sshd_config`).
 
+## B.13 Permisos sudo para acciones desde la app
+
+La app permite, desde **Configuración**, apagar el sistema y reiniciar el servicio
+(este último tras cambiar una ruta de almacenamiento). Como el servicio corre como
+`silver` sin terminal interactiva, hay que autorizar esos comandos concretos sin
+contraseña. Se hace con un fichero en `/etc/sudoers.d/` (permiso mínimo, solo esos comandos):
+
+```bash
+echo 'silver ALL=(root) NOPASSWD: /usr/bin/systemctl restart sante.service, /usr/sbin/shutdown' | sudo tee /etc/sudoers.d/sante
+sudo chmod 440 /etc/sudoers.d/sante
+sudo visudo -c        # validar sintaxis (debe decir "parsed OK")
+```
+
+> Verifica primero las rutas reales de los binarios con `which systemctl` y
+> `which shutdown` (en Debian 13 suelen ser `/usr/bin/systemctl` y `/usr/sbin/shutdown`).
+> Si difieren, ajusta el fichero. Este permiso es acotado: `silver` solo puede reiniciar
+> `sante.service` y apagar, nada más. Como la Raspberry no está expuesta a internet
+> (solo red local), el riesgo es mínimo.
+
+Prueba que funciona sin pedir contraseña:
+
+```bash
+sudo -n systemctl restart sante.service && echo OK
+```
+
+> El botón "Reiniciar servicio" de la app (pestaña Almacenamiento) y el botón "Apagar"
+> (pestaña Backup) dependen de este permiso. Si no está configurado, esas acciones
+> fallarán silenciosamente.
+
 ---
 
 # Parte C — Solución de problemas y referencia
@@ -401,11 +430,26 @@ sudo shutdown -h now           # apagar (también desde la app: Configuración >
 ```
 /home/silver/sante/          ← Código de la app + BD (sante.db)
 /home/silver/sante/backups/  ← Backups pre-despliegue creados por deploy.sh
-/media/usb/
+/home/silver/sante/app/logs/ ← Log de errores (se queda en la SD, es ligero)
+/media/usb/                  ← Documentos (pesados) en el USB externo
 ├── documentos_firmados/     ← PDFs de consentimientos firmados
 ├── facturas/                ← PDFs de facturas / justificantes
 ├── pacientes/               ← Documentos adjuntos de pacientes
-├── backups/                 ← Backups diarios (cron)
-└── logs/
-    └── errors.log
+└── backups/                 ← Backups automáticos diarios/mensuales
 ```
+
+## Rutas de almacenamiento (configurables desde la app)
+
+Las carpetas de documentos ya no se fijan solo en el `.env`: se configuran desde
+**Configuración > Almacenamiento** (solo ADMIN). Ahí se ve el espacio libre de cada
+carpeta y se puede cambiar la ubicación (por ejemplo, a un USB nuevo cuando el actual
+se llene). Al cambiar una ruta:
+
+- La app comprueba que hay espacio y que no hay ficheros con el mismo nombre en el destino.
+  Si los hubiera, avisa y no mueve nada (requiere resolverlo a mano).
+- Mueve los ficheros existentes a la nueva carpeta de forma segura (copiar, verificar, borrar).
+- El cambio se aplica al **reiniciar el servicio** (botón en la misma pantalla; requiere
+  el permiso sudo de la sección B.13).
+
+Los valores iniciales de estas rutas los siembra la migración `0002_storage_paths`
+(apuntando a `/media/usb/...`). El log de errores **no** es configurable: siempre en la SD.

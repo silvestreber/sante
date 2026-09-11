@@ -122,28 +122,35 @@ Test note content
 
 ## Tareas pendientes (en orden, con cuidado en producción)
 
-- [~] **1. Despliegue fácil (script de actualización)** — EN PROGRESO
-  Hecho: proyecto subido a repo git privado en GitHub (commit inicial, rama `main`), con `.gitignore`
-  que protege datos sensibles.
-  Pendiente: conectar `/home/silver/sante` de la Raspberry con el repo; crear script `deploy.sh` que
-  haga backup del `.db` → `git pull` → instalar dependencias si cambió `requirements.txt` → aplicar
-  migraciones si hacen falta → reiniciar `sante` → verificar healthcheck. Decidir sistema de
-  migraciones: actualmente NO hay (la BD se crea con `Base.metadata.create_all` en
-  `app/db/init_db.py`, que crea tablas nuevas pero NO altera columnas existentes). Proponer Alembic o
-  estrategia incremental segura que NO borre datos. Backup del `.db` antes de migrar SIEMPRE.
-  NOTA: la guía menciona `python seed.py` pero no se encuentra ese fichero en dev; verificar en la Pi.
+- [x] **1. Despliegue fácil (script de actualización)** — COMPLETADO
+  Hecho: repo git privado en GitHub (rama `main`) con `.gitignore` que protege datos sensibles.
+  Raspberry vinculada al repo. `deploy.sh` creado: backup del `.db` → `git pull` → deps si cambió
+  `requirements.txt` → migraciones → reiniciar `sante` → healthcheck con reintentos (20x2s=40s, la
+  app tarda ~11s en arrancar) → resumen final OK/FALLO. Sistema de migraciones ligeras propio en
+  `migrations/` (runner.py + versions/, NO Alembic; idempotente, no destructivo). Guía unificada en
+  `DESPLIEGUE.md`. La BD se crea sola al arrancar (`init_db()` en el lifespan); no existe `seed.py`.
 
-- [ ] **2. Rutas de almacenamiento configurables desde la app**
-  Inventario COMPLETO de todas las rutas donde la app escribe ficheros, indicando cuáles van a la
-  microSD y cuáles al USB externo. Permitir configurarlas desde la vista de Configuración (no desde
-  código ni `.env`) para poder cambiar de USB cuando se llene. Puntos conocidos:
-  - Documentos firmados: `SIGNED_DOCS_PATH` (env, default `"C:/PoC/documentos_firmados"` — ruta Windows!)
-  - Facturas PDF: se generan en `tempfile` temporal; hay copias en `app/static/invoices/`
-  - Backups: carpeta `backups/` (symlink a USB montado en `media-usb.mount` según guía)
-  - Uploads de pacientes: variable `UPLOADS_PATH`/`PATIENT_DOCS_PATH` en `.env`
-  NOTA: el TODO dice que ya hay rutas parametrizables por `.env`, pero NO desde la vista de
-  Configuración; eso es lo que falta. Los puntos de montaje deben ser FIJOS y persistir tras reiniciar
-  (fstab o unit `.mount` de systemd). Indicar explícitamente qué ficheros acaban en SD vs USB.
+- [x] **2. Rutas de almacenamiento configurables desde la app** — COMPLETADO
+  Ahora las rutas se configuran desde **Configuración > Almacenamiento** (solo ADMIN), no solo por `.env`.
+  Implementación:
+  - Nuevo módulo `app/storage.py`: resuelve cada ruta base con prioridad tabla `Config` → `.env` →
+    default por SO (Linux `/media/usb/...`). Genera **nombres únicos globales** (prefijo 8 hex) para que
+    dos categorías nunca colisionen. Movimiento seguro (comprueba espacio + colisiones, estrategia
+    copiar-verificar-borrar por tamaño de bytes, con rollback; el origen no se toca hasta verificar).
+  - Cada documento guarda en BD la **ruta relativa** (nombre de fichero); la absoluta se reconstruye
+    como base(Config) + relativa. Refactorizados: consentimientos (`consent_generator.py`,
+    `documents.py`), facturas (`billing.py`, nueva columna `Invoice.pdf_filename`), uploads de
+    pacientes (`patients.py`, estructura plana), backups automáticos (`reminders.py`).
+  - **Logs se quedan en la SD** (`main.py`, default relativo al proyecto). Lo demás (documentos,
+    facturas, uploads, backups) va al USB.
+  - Endpoints en `config.py`: GET storage-paths (con espacio libre), preview, apply (mueve en
+    background), progress (polling), restart-service. UI: pestaña con tabla, barra de progreso, lista
+    de colisiones y botón de reinicio del servicio.
+  - Migración `0002_storage_paths`: añade `invoices.pdf_filename` y siembra las rutas de la Pi en
+    `Config` (idempotente).
+  - Reinicio del servicio desde la app: requiere permiso sudo acotado para `silver` (ver `DESPLIEGUE.md`
+    sección B.13). Se cambió el default Windows de las rutas (relacionado con el bug de la tarea 4).
+  Verificado en local: tests auth (6/6) y billing (16/16) OK; flujo de rutas probado end-to-end.
 
 - [ ] **3. Política de la app respecto al USB externo**
   Documentar y, si hace falta, mejorar el comportamiento cuando:

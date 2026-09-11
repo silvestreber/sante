@@ -13,7 +13,10 @@ from app.db.init_db import init_db
 from app.routers import auth, pages, patients, appointments, clinical, treatments, billing, documents, finance, users, notifications, audit, config, waitlist, backup
 from app.reminders import start_reminder_scheduler
 
-LOG_PATH = os.getenv("LOG_PATH", "C:/PoC/sante/app/logs/errors.log")
+# Los logs se quedan SIEMPRE en la SD (junto al proyecto), no en el USB.
+# Default relativo al proyecto para que funcione en cualquier SO.
+_DEFAULT_LOG = os.path.join(os.path.dirname(__file__), "logs", "errors.log")
+LOG_PATH = os.getenv("LOG_PATH", _DEFAULT_LOG)
 os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
 
 logging.basicConfig(

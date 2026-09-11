@@ -1,14 +1,16 @@
 from datetime import date, datetime, timedelta
 import os
 import subprocess
+import threading
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_role
-from app.db.database import get_db
+from app.db.database import SessionLocal, get_db
 from app.db.models import Appointment, AppointmentStatus, Config, Holiday, PhysioAbsence, PhysioSchedule, Schedule, SpecialSchedule, User, UserRole
+from app import storage
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -542,3 +544,210 @@ def delete_physio_absence(
     db.delete(absence)
     db.commit()
     return {"message": "Ausencia eliminada"}
+
+
+# =====================================================================
+# Rutas de almacenamiento configurables
+# =====================================================================
+
+# Nombre del servicio systemd (para el reinicio). Configurable por entorno.
+SERVICE_NAME = os.getenv("SERVICE_NAME", "sante")
+
+# Estado del movimiento de ficheros en curso (en memoria, protegido por lock).
+_move_lock = threading.Lock()
+_move_state: dict = {
+    "running": False,
+    "key": None,
+    "done": 0,
+    "total": 0,
+    "current": "",
+    "finished": False,
+    "success": False,
+    "error": "",
+    "collisions": [],
+    "need_restart": False,
+}
+
+
+def _reset_move_state():
+    _move_state.update({
+        "running": False, "key": None, "done": 0, "total": 0, "current": "",
+        "finished": False, "success": False, "error": "", "collisions": [],
+        "need_restart": False,
+    })
+
+
+class StoragePathUpdate(BaseModel):
+    key: str
+    path: str
+
+
+def _human_gb(num_bytes: int) -> float:
+    return round(num_bytes / (1024 ** 3), 2)
+
+
+@router.get("/storage-paths")
+def get_storage_paths(db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
+    """Devuelve las rutas de almacenamiento configuradas y el espacio libre de cada una."""
+    result = []
+    for key in storage.STORAGE_KEYS:
+        path = storage.get_base_path(db, key, ensure=False)
+        free = storage.free_space_bytes(path)
+        result.append({
+            "key": key,
+            "label": storage.STORAGE_LABELS[key],
+            "path": path,
+            "free_gb": _human_gb(free),
+            "exists": os.path.isdir(path),
+            "file_count": len(storage.list_files(path)),
+        })
+    return {"paths": result, "service": SERVICE_NAME}
+
+
+@router.post("/storage-paths/preview")
+def preview_storage_change(
+    data: StoragePathUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    """Analiza un cambio de ruta SIN aplicarlo: ficheros a mover, espacio y colisiones."""
+    if data.key not in storage.STORAGE_KEYS:
+        raise HTTPException(status_code=400, detail="Categoría de almacenamiento desconocida")
+    new_path = (data.path or "").strip()
+    if not new_path:
+        raise HTTPException(status_code=400, detail="La ruta no puede estar vacía")
+    if not os.path.isabs(new_path):
+        raise HTTPException(status_code=400, detail="La ruta debe ser absoluta")
+
+    current = storage.get_base_path(db, data.key, ensure=False)
+    plan = storage.plan_move(current, new_path)
+
+    return {
+        "current_path": current,
+        "new_path": new_path,
+        "same": plan.reason == "same",
+        "file_count": plan.count,
+        "total_mb": round(plan.total_bytes / (1024 ** 2), 2),
+        "free_gb": _human_gb(plan.free_bytes),
+        "ok": plan.ok,
+        "reason": plan.reason,
+        "collisions": plan.collisions,
+    }
+
+
+def _run_move(key: str, src: str, dst: str):
+    """Ejecuta el movimiento en background y actualiza _move_state. Al terminar OK,
+    guarda la nueva ruta en Config y marca que hace falta reiniciar el servicio."""
+    def progress(done, total, name):
+        with _move_lock:
+            _move_state["done"] = done
+            _move_state["total"] = total
+            _move_state["current"] = name
+
+    try:
+        plan = storage.plan_move(src, dst)
+        if not plan.ok:
+            with _move_lock:
+                _move_state.update({
+                    "running": False, "finished": True, "success": False,
+                    "collisions": plan.collisions,
+                    "error": {
+                        "collision": "Hay ficheros con el mismo nombre en el destino.",
+                        "no_space": "No hay espacio suficiente en el destino.",
+                    }.get(plan.reason, f"No se puede mover: {plan.reason}"),
+                })
+            return
+
+        with _move_lock:
+            _move_state["total"] = plan.count
+
+        storage.execute_move(src, dst, plan, progress_cb=progress)
+
+        # Movimiento OK: persistir la nueva ruta en Config.
+        db = SessionLocal()
+        try:
+            storage.set_base_path(db, key, dst)
+            db.commit()
+        finally:
+            db.close()
+
+        with _move_lock:
+            _move_state.update({
+                "running": False, "finished": True, "success": True,
+                "need_restart": True,
+            })
+    except Exception as e:
+        with _move_lock:
+            _move_state.update({
+                "running": False, "finished": True, "success": False,
+                "error": f"Error moviendo ficheros: {e}",
+            })
+
+
+@router.post("/storage-paths/apply")
+def apply_storage_change(
+    data: StoragePathUpdate,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    """Aplica un cambio de ruta. Si hay ficheros que mover, lo hace en background
+    (consultar progreso en /storage-paths/progress). Si la carpeta origen está
+    vacía o es la misma, guarda directamente."""
+    if data.key not in storage.STORAGE_KEYS:
+        raise HTTPException(status_code=400, detail="Categoría de almacenamiento desconocida")
+    new_path = (data.path or "").strip()
+    if not new_path or not os.path.isabs(new_path):
+        raise HTTPException(status_code=400, detail="La ruta debe ser absoluta y no vacía")
+
+    with _move_lock:
+        if _move_state["running"]:
+            raise HTTPException(status_code=409, detail="Ya hay un movimiento en curso")
+
+    current = storage.get_base_path(db, data.key, ensure=False)
+    plan = storage.plan_move(current, new_path)
+
+    # Colisiones: abortar y devolver la lista (intervención manual).
+    if plan.reason == "collision":
+        raise HTTPException(status_code=409, detail={
+            "message": f"No se puede cambiar la ubicación: {len(plan.collisions)} fichero(s) con el mismo nombre en el destino.",
+            "collisions": plan.collisions,
+        })
+    if plan.reason == "no_space":
+        raise HTTPException(status_code=409, detail="No hay espacio suficiente en el destino.")
+
+    # Sin ficheros que mover (o misma carpeta): guardar directo.
+    if plan.reason in ("same", "empty"):
+        storage.set_base_path(db, data.key, new_path)
+        os.makedirs(new_path, exist_ok=True)
+        db.commit()
+        return {"moved": False, "need_restart": True, "message": "Ruta actualizada. Reinicie el servicio para aplicar el cambio."}
+
+    # Hay ficheros: mover en background.
+    with _move_lock:
+        _reset_move_state()
+        _move_state.update({"running": True, "key": data.key, "total": plan.count})
+    background.add_task(_run_move, data.key, current, new_path)
+    return {"moved": True, "file_count": plan.count, "message": "Moviendo ficheros..."}
+
+
+@router.get("/storage-paths/progress")
+def storage_move_progress(current_user: User = Depends(admin_only)):
+    """Estado del movimiento de ficheros en curso."""
+    with _move_lock:
+        return dict(_move_state)
+
+
+@router.post("/storage-paths/restart-service")
+def restart_service(current_user: User = Depends(require_role(UserRole.ADMIN))):
+    """Reinicia el servicio de la aplicación para aplicar cambios de ruta.
+
+    En Linux usa systemctl (requiere permiso sudo acotado para el usuario del
+    servicio). En Windows no aplica (solo desarrollo)."""
+    if os.name == "nt":
+        return {"message": "En Windows reinicie la aplicación manualmente."}
+    try:
+        subprocess.Popen(["sudo", "systemctl", "restart", f"{SERVICE_NAME}.service"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo reiniciar el servicio: {e}")
+    return {"message": f"Reiniciando el servicio {SERVICE_NAME}..."}

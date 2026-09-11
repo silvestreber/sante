@@ -17,14 +17,45 @@ from app.db.models import (
     DocType, EntryType, FinanceEntry, Invoice, Patient, PaymentMethod, SessionPack, User,
 )
 from app.pdf import generate_invoice_pdf
+from app.storage import abs_path, get_invoices_path, unique_name
 
 import shutil
 
 EXCEL_TEMPLATE_GLOB = os.path.join(os.path.dirname(__file__), "..", "..", "Eugenia Facturaci*.xlsx")
 
-INVOICES_PATH = os.getenv("INVOICES_PATH", "C:/PoC/sante/app/static/invoices")
-
 router = APIRouter(prefix="/api/billing", tags=["billing"])
+
+
+def _invoice_pdf_abs(db: Session, invoice: "Invoice") -> str | None:
+    """Ruta absoluta del PDF de una factura, o None si no tiene fichero asociado."""
+    if not invoice.pdf_filename:
+        return None
+    if os.path.isabs(invoice.pdf_filename):
+        return invoice.pdf_filename  # compatibilidad con datos antiguos
+    return abs_path(get_invoices_path(db, ensure=False), invoice.pdf_filename)
+
+
+def _delete_invoice_pdf(db: Session, invoice: "Invoice") -> None:
+    """Borra el PDF de una factura si existe."""
+    path = _invoice_pdf_abs(db, invoice)
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def _save_invoice_pdf(db: Session, invoice: "Invoice", pdf_data: dict) -> None:
+    """(Re)genera el PDF de una factura con nombre único global y lo guarda en la
+    carpeta configurada. Borra el PDF anterior si lo hubiera y actualiza
+    invoice.pdf_filename. No hace commit."""
+    _delete_invoice_pdf(db, invoice)
+    base = get_invoices_path(db)
+    tmp_path = generate_invoice_pdf(pdf_data)
+    filename = unique_name(invoice.invoice_number, ".pdf")
+    final_path = os.path.join(base, filename)
+    shutil.move(tmp_path, final_path)
+    invoice.pdf_filename = filename
 
 
 # --- Schemas ---
@@ -185,10 +216,8 @@ def create_invoice(
         "patient_name": f"{patient.first_name} {patient.last_name}",
         "patient_dni": patient.dni or "",
     }
-    tmp_path = generate_invoice_pdf(pdf_data)
-    os.makedirs(INVOICES_PATH, exist_ok=True)
-    final_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-    shutil.move(tmp_path, final_path)
+    _save_invoice_pdf(db, invoice, pdf_data)
+    db.commit()
 
     log_action(db, current_user.id, "CREAR", "FACTURA", invoice.id, f"{invoice.invoice_number}")
 
@@ -245,10 +274,6 @@ def update_invoice(
             db.commit()
 
     # Regenerar PDF
-    old_pdf = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-    if os.path.exists(old_pdf):
-        os.remove(old_pdf)
-
     patient = db.query(Patient).filter(Patient.id == invoice.patient_id).first()
     description = ""
     if invoice.appointment:
@@ -267,10 +292,8 @@ def update_invoice(
         "patient_name": f"{patient.first_name} {patient.last_name}",
         "patient_dni": patient.dni or "",
     }
-    tmp_path = generate_invoice_pdf(pdf_data)
-    os.makedirs(INVOICES_PATH, exist_ok=True)
-    final_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-    shutil.move(tmp_path, final_path)
+    _save_invoice_pdf(db, invoice, pdf_data)
+    db.commit()
 
     log_action(db, current_user.id, "EDITAR", "FACTURA", invoice.id, invoice.invoice_number)
     return {"message": "Factura actualizada"}
@@ -286,8 +309,8 @@ def view_invoice_pdf(
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
-    pdf_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-    if not os.path.exists(pdf_path):
+    pdf_path = _invoice_pdf_abs(db, invoice)
+    if not pdf_path or not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF no encontrado")
     return FileResponse(pdf_path, media_type="application/pdf", filename=f"{invoice.invoice_number}.pdf", content_disposition_type="inline")
 
@@ -313,9 +336,6 @@ def delete_invoice(
         db.commit()
 
         # Regenerar PDF con estado pendiente
-        old_pdf = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-        if os.path.exists(old_pdf):
-            os.remove(old_pdf)
         patient = db.query(Patient).filter(Patient.id == invoice.patient_id).first()
         description = ""
         if invoice.appointment:
@@ -333,18 +353,14 @@ def delete_invoice(
             "patient_name": f"{patient.first_name} {patient.last_name}",
             "patient_dni": patient.dni or "",
         }
-        tmp_path = generate_invoice_pdf(pdf_data)
-        os.makedirs(INVOICES_PATH, exist_ok=True)
-        final_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-        shutil.move(tmp_path, final_path)
+        _save_invoice_pdf(db, invoice, pdf_data)
+        db.commit()
 
         log_action(db, current_user.id, "REVERTIR_PAGO", "FACTURA", invoice_id, invoice.invoice_number)
         return {"message": "Pago revertido, documento marcado como pendiente"}
     else:
         # Sin asociación: eliminar completamente
-        pdf_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
+        _delete_invoice_pdf(db, invoice)
         invoice_number = invoice.invoice_number
         db.delete(invoice)
         db.commit()
@@ -480,10 +496,6 @@ def update_pack(
             db.commit()
 
         # Regenerar PDF
-        old_pdf = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-        if os.path.exists(old_pdf):
-            os.remove(old_pdf)
-
         patient = db.query(Patient).filter(Patient.id == invoice.patient_id).first()
         pdf_data = {
             "invoice_number": invoice.invoice_number,
@@ -496,10 +508,8 @@ def update_pack(
             "patient_name": f"{patient.first_name} {patient.last_name}",
             "patient_dni": patient.dni or "",
         }
-        tmp_path = generate_invoice_pdf(pdf_data)
-        os.makedirs(INVOICES_PATH, exist_ok=True)
-        final_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-        shutil.move(tmp_path, final_path)
+        _save_invoice_pdf(db, invoice, pdf_data)
+        db.commit()
 
     return {"message": "Bono actualizado"}
 
@@ -522,9 +532,7 @@ def cancel_pack(
         # Eliminar ingreso de contabilidad
         _remove_income(db, invoice.id)
         # Eliminar PDF
-        pdf_path = os.path.join(INVOICES_PATH, f"{invoice.invoice_number}.pdf")
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
+        _delete_invoice_pdf(db, invoice)
         # Eliminar factura
         invoice_number = invoice.invoice_number
         db.delete(invoice)

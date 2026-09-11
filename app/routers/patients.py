@@ -1,6 +1,6 @@
 import io
 import os
-import uuid
+import io
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -12,12 +12,20 @@ from app.auth import get_current_user, require_role
 from app.audit_log import log_action
 from app.db.database import get_db
 from app.db.models import Invoice, Patient, PatientDocument, User, UserRole
+from app.storage import abs_path, get_patient_docs_path, unique_name
+
+
+def _doc_abs_path(db: Session, doc: PatientDocument) -> str | None:
+    """Ruta absoluta de un documento de paciente a partir del nombre relativo."""
+    if not doc.filepath:
+        return None
+    if os.path.isabs(doc.filepath):
+        return doc.filepath  # compatibilidad con datos antiguos
+    return abs_path(get_patient_docs_path(db, ensure=False), doc.filepath)
 
 from dotenv import load_dotenv
 
 load_dotenv()
-
-UPLOADS_PATH = os.getenv("PATIENT_DOCS_PATH", "C:/PoC/sante/uploads")
 
 router = APIRouter(prefix="/api/patients", tags=["patients"])
 
@@ -190,12 +198,11 @@ def upload_document(
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
-    patient_dir = os.path.join(UPLOADS_PATH, str(patient_id))
-    os.makedirs(patient_dir, exist_ok=True)
-
+    base = get_patient_docs_path(db)
     ext = os.path.splitext(file.filename)[1] if file.filename else ""
-    stored_name = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join(patient_dir, stored_name)
+    # Nombre único global: prefijo + id de paciente para trazabilidad.
+    stored_name = unique_name(f"p{patient_id}", ext)
+    filepath = os.path.join(base, stored_name)
 
     with open(filepath, "wb") as f:
         f.write(file.file.read())
@@ -203,7 +210,7 @@ def upload_document(
     doc = PatientDocument(
         patient_id=patient_id,
         filename=file.filename or stored_name,
-        filepath=filepath,
+        filepath=stored_name,  # ruta relativa (base en Config)
         description=description.strip() if description else None,
     )
     db.add(doc)
@@ -221,9 +228,10 @@ def download_document(
     doc = db.query(PatientDocument).filter(
         PatientDocument.id == doc_id, PatientDocument.patient_id == patient_id
     ).first()
-    if not doc or not os.path.exists(doc.filepath):
+    path = _doc_abs_path(db, doc) if doc else None
+    if not doc or not path or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Documento no encontrado")
-    return FileResponse(doc.filepath, filename=doc.filename)
+    return FileResponse(path, filename=doc.filename)
 
 
 @router.get("/{patient_id}/documents/{doc_id}/view")
@@ -242,11 +250,12 @@ def view_document(
     doc = db.query(PatientDocument).filter(
         PatientDocument.id == doc_id, PatientDocument.patient_id == patient_id
     ).first()
-    if not doc or not os.path.exists(doc.filepath):
+    path = _doc_abs_path(db, doc) if doc else None
+    if not doc or not path or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     import mimetypes
     media_type = mimetypes.guess_type(doc.filename)[0] or "application/octet-stream"
-    return FileResponse(doc.filepath, media_type=media_type, filename=doc.filename, content_disposition_type="inline")
+    return FileResponse(path, media_type=media_type, filename=doc.filename, content_disposition_type="inline")
 
 
 @router.delete("/{patient_id}/documents/{doc_id}", status_code=200)
@@ -261,8 +270,9 @@ def delete_document(
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
-    if os.path.exists(doc.filepath):
-        os.remove(doc.filepath)
+    path = _doc_abs_path(db, doc)
+    if path and os.path.exists(path):
+        os.remove(path)
     db.delete(doc)
     db.commit()
     log_action(db, current_user.id, "ELIMINAR", "DOCUMENTO", doc_id, f"Paciente {patient_id}")

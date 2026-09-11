@@ -4,9 +4,10 @@ import re
 from datetime import datetime, timezone, timedelta
 from docx import Document
 
+from app.storage import unique_name
+
 TEMPLATES_PATH = os.path.join(os.path.dirname(__file__), 'static', 'docs')
 BLANK_PDFS_PATH = os.path.join(os.path.dirname(__file__), 'static', 'docs', 'blank_pdfs')
-SIGNED_DOCS_PATH = os.getenv("SIGNED_DOCS_PATH", "C:/PoC/documentos_firmados")
 
 # Timezone España (UTC+2 en verano, UTC+1 en invierno)
 SPAIN_TZ = timedelta(hours=2)
@@ -72,8 +73,11 @@ def _replace_in_paragraph(paragraph, replacements: dict):
             run.text = ""
 
 
-def fill_consent_template(template_filename: str, data: dict) -> str:
-    """Rellena una plantilla docx con los datos y devuelve la ruta del docx generado."""
+def fill_consent_template(template_filename: str, data: dict, output_dir: str) -> str:
+    """Rellena una plantilla docx con los datos y devuelve la ruta del docx generado.
+
+    El docx se guarda en `output_dir` con un nombre único global.
+    """
     template_path = os.path.join(TEMPLATES_PATH, template_filename)
     if not os.path.exists(template_path):
         raise FileNotFoundError(f"Plantilla no encontrada: {template_filename}")
@@ -135,13 +139,15 @@ def fill_consent_template(template_filename: str, data: dict) -> str:
                 for p in footer.paragraphs:
                     _replace_in_paragraph(p, replacements)
 
-    os.makedirs(SIGNED_DOCS_PATH, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     safe_name = re.sub(r'[^\w\-]', '_', data.get("nombre_paciente", "paciente"))
     base_name = template_filename.replace(".docx", "")
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     suffix = data.get("_suffix", "")
-    output_filename = f"{base_name}_{safe_name}_{timestamp}{suffix}.docx"
-    output_path = os.path.join(SIGNED_DOCS_PATH, output_filename)
+    # Nombre lógico + prefijo único global (para que nunca colisione entre carpetas).
+    logical_name = f"{base_name}_{safe_name}_{timestamp}{suffix}"
+    output_filename = unique_name(logical_name, ".docx")
+    output_path = os.path.join(output_dir, output_filename)
     doc.save(output_path)
 
     return output_path
@@ -160,15 +166,20 @@ def convert_docx_to_pdf(docx_path: str) -> str:
         pythoncom.CoUninitialize()
 
 
-def generate_signed_consent(template_filename: str, data: dict) -> str:
-    """Genera el documento firmado completo (PDF). Devuelve ruta del PDF."""
-    docx_path = fill_consent_template(template_filename, data)
+def generate_signed_consent(template_filename: str, data: dict, output_dir: str) -> tuple[str, str]:
+    """Genera el documento firmado completo (PDF) en `output_dir`.
+
+    Devuelve una tupla (ruta_absoluta_pdf, nombre_relativo_pdf). El nombre relativo
+    es lo que debe persistirse en la BD; la ruta absoluta se reconstruye luego como
+    base_de_la_categoria + nombre_relativo.
+    """
+    docx_path = fill_consent_template(template_filename, data, output_dir)
     pdf_path = convert_docx_to_pdf(docx_path)
     try:
         os.unlink(docx_path)
     except OSError:
         pass
-    return pdf_path
+    return pdf_path, os.path.basename(pdf_path)
 
 
 def generate_blank_pdfs():

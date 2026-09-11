@@ -12,6 +12,18 @@ from app.consent_generator import MESES
 from app.db.database import get_db
 from app.db.models import Invoice, Patient, SignedConsent, Treatment, User
 from app.email_service import send_email_with_attachment
+from app.storage import abs_path, get_signed_docs_path
+
+
+def _consent_abs_path(db: Session, relative_name: str | None) -> str | None:
+    """Reconstruye la ruta absoluta de un PDF de consentimiento a partir del
+    nombre relativo guardado en BD y la carpeta base configurada."""
+    if not relative_name:
+        return None
+    # Compatibilidad: si en BD hubiera una ruta absoluta antigua, respetarla.
+    if os.path.isabs(relative_name):
+        return relative_name
+    return abs_path(get_signed_docs_path(db, ensure=False), relative_name)
 from app.pdf import (
     generate_attendance_pdf,
     generate_consent_pdf,
@@ -365,7 +377,8 @@ def sign_consent(
         SignedConsent.is_revoked == True,
     ).all()
     for r in revoked:
-        for path in [r.pdf_path, r.revocation_pdf_path]:
+        for rel in [r.pdf_path, r.revocation_pdf_path]:
+            path = _consent_abs_path(db, rel)
             if path and os.path.exists(path):
                 try:
                     os.unlink(path)
@@ -388,8 +401,9 @@ def sign_consent(
         "patología_paciente": data.patologia_paciente or "",
     }
 
+    output_dir = get_signed_docs_path(db)
     try:
-        pdf_path = generate_signed_consent(template, template_data)
+        _, pdf_rel = generate_signed_consent(template, template_data, output_dir)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada")
     except Exception as e:
@@ -400,7 +414,7 @@ def sign_consent(
     consent = SignedConsent(
         patient_id=patient_id,
         template_name=template,
-        pdf_path=pdf_path,
+        pdf_path=pdf_rel,
         signed_by=current_user.id,
         signed_at=now_spain,
     )
@@ -408,7 +422,7 @@ def sign_consent(
     db.commit()
     db.refresh(consent)
 
-    return {"id": consent.id, "pdf_path": pdf_path, "message": "Consentimiento firmado"}
+    return {"id": consent.id, "pdf_path": pdf_rel, "message": "Consentimiento firmado"}
 
 
 @router.post("/consent-revoke/{patient_id}/{consent_id}")
@@ -459,8 +473,9 @@ def revoke_consent(
         "_suffix": "_revocacion",
     }
 
+    output_dir = get_signed_docs_path(db)
     try:
-        pdf_path = generate_signed_consent(consent.template_name, template_data)
+        _, pdf_rel = generate_signed_consent(consent.template_name, template_data, output_dir)
     except Exception as e:
         logging.error(f"Error generando revocación: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar documento: {str(e)}")
@@ -468,10 +483,10 @@ def revoke_consent(
     # Marcar el original como revocado
     consent.is_revoked = True
     consent.revoked_at = now
-    consent.revocation_pdf_path = pdf_path
+    consent.revocation_pdf_path = pdf_rel
     db.commit()
 
-    return {"message": "Consentimiento revocado", "pdf_path": pdf_path}
+    return {"message": "Consentimiento revocado", "pdf_path": pdf_rel}
 
 
 @router.get("/signed-consents/{patient_id}")
@@ -512,7 +527,8 @@ def view_signed_consent_pdf(
     ).first()
     if not consent:
         raise HTTPException(status_code=404, detail="Consentimiento no encontrado")
-    pdf_path = consent.revocation_pdf_path if type == "revocation" else consent.pdf_path
+    rel = consent.revocation_pdf_path if type == "revocation" else consent.pdf_path
+    pdf_path = _consent_abs_path(db, rel)
     if not pdf_path or not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF no encontrado")
     return FileResponse(pdf_path, media_type="application/pdf")
@@ -538,7 +554,8 @@ def email_signed_consent(
     if not to_email:
         raise HTTPException(status_code=400, detail="El paciente no tiene email registrado")
 
-    if not os.path.exists(consent.pdf_path):
+    consent_pdf_path = _consent_abs_path(db, consent.pdf_path)
+    if not consent_pdf_path or not os.path.exists(consent_pdf_path):
         raise HTTPException(status_code=404, detail="PDF no encontrado")
 
     try:
@@ -546,8 +563,8 @@ def email_signed_consent(
             to_email=to_email,
             subject=f"Consentimiento informado - {os.getenv('CLINIC_NAME', 'Santé')}",
             body=f"Adjunto encontrará su consentimiento informado firmado.\n\nUn saludo,\n{os.getenv('CLINIC_NAME', 'Santé Fisioterapia')}",
-            attachment_path=consent.pdf_path,
-            attachment_filename=os.path.basename(consent.pdf_path),
+            attachment_path=consent_pdf_path,
+            attachment_filename=os.path.basename(consent_pdf_path),
         )
     except Exception as e:
         logging.error(f"Error enviando email: {e}")

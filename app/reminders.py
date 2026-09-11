@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 REMINDER_INTERVAL_SECONDS = 3600  # 1 hora
 
-AUTO_BACKUP_PATH = os.getenv("AUTO_BACKUP_PATH", "C:/PoC/sante/backups")
 DB_PATH = DATABASE_URL.replace("sqlite:///./", "")
 
 
@@ -103,20 +102,29 @@ def _send_simple_email(to_email: str, subject: str, body: str):
 def auto_backup_db():
     """Copia de seguridad diaria de la BD. El día 1 del mes persiste una copia mensual."""
     import shutil
-    os.makedirs(AUTO_BACKUP_PATH, exist_ok=True)
+    from app.storage import get_auto_backup_path
+
     if not os.path.exists(DB_PATH):
         logger.error(f"Auto-backup: BD no encontrada en {DB_PATH}")
         return
+
+    # La ruta de backups se lee desde la configuración (tabla Config).
+    db = SessionLocal()
+    try:
+        backup_dir = get_auto_backup_path(db)
+    finally:
+        db.close()
+
     today = datetime.now(timezone.utc) + timedelta(hours=2)
     # Copia mensual persistente el día 1
     if today.day == 1:
         monthly_name = f"sante_mensual_{today.strftime('%Y%m')}.db"
-        monthly_path = os.path.join(AUTO_BACKUP_PATH, monthly_name)
+        monthly_path = os.path.join(backup_dir, monthly_name)
         if not os.path.exists(monthly_path):
             shutil.copy2(DB_PATH, monthly_path)
             logger.info(f"Backup mensual creado: {monthly_name}")
     # Copia diaria (sobreescribe la anterior)
-    daily_path = os.path.join(AUTO_BACKUP_PATH, "sante_diaria.db")
+    daily_path = os.path.join(backup_dir, "sante_diaria.db")
     shutil.copy2(DB_PATH, daily_path)
     logger.info("Backup diario actualizado")
 

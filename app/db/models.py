@@ -162,6 +162,7 @@ class Invoice(Base):
     amount = Column(Float, nullable=False)
     payment_method = Column(Enum(PaymentMethod), nullable=True)
     is_paid = Column(Boolean, default=False)
+    pdf_filename = Column(String, nullable=True)  # nombre relativo del PDF (base en Config)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     patient = relationship("Patient", back_populates="invoices")

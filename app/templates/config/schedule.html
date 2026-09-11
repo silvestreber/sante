@@ -14,6 +14,7 @@
     <button onclick="showTab('import')" id="tab-import" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">Importar datos</button>
     <button onclick="showTab('export-billing')" id="tab-export-billing" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Exportar gestoría</button>
     <button onclick="showTab('backup')" id="tab-backup" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Backup</button>
+    <button onclick="showTab('storage')" id="tab-storage" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Almacenamiento</button>
 </div>
 
 <!-- Tab: Horario semanal -->
@@ -268,6 +269,67 @@
         </div>
     </div>
 </div>
+
+<!-- Tab: Almacenamiento -->
+<div id="panel-storage" class="hidden">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 space-y-4">
+        <div>
+            <h2 class="font-semibold text-gray-700 mb-1">Ubicación de los ficheros</h2>
+            <p class="text-sm text-gray-500">Carpetas donde se guardan los documentos. Los registros de actividad (logs) se guardan siempre en la tarjeta SD y no se configuran aquí.</p>
+            <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+                Al cambiar una ubicación, los ficheros existentes se moverán a la nueva carpeta y hará falta <strong>reiniciar el servicio</strong> para que el cambio surta efecto. El cambio solo se guarda si el traslado se completa sin errores.
+            </p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="text-left px-3 py-2">Categoría</th>
+                        <th class="text-left px-3 py-2">Ruta actual</th>
+                        <th class="text-left px-3 py-2">Ficheros</th>
+                        <th class="text-left px-3 py-2">Espacio libre</th>
+                        <th class="px-3 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody id="storage-body"></tbody>
+            </table>
+        </div>
+
+        <hr>
+        <div>
+            <h2 class="font-semibold text-gray-700 mb-3">Reiniciar el servicio</h2>
+            <p class="text-sm text-gray-500 mb-3">Aplica los cambios de ubicación pendientes. La aplicación no estará disponible unos segundos mientras arranca de nuevo.</p>
+            <button onclick="restartService()" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Reiniciar servicio</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal cambio de ubicación -->
+<div id="storage-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4">
+        <h3 class="font-semibold text-gray-800" id="storage-modal-title">Cambiar ubicación</h3>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Nueva ruta (absoluta)</label>
+            <input type="text" id="storage-new-path" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="/media/usb/...">
+            <p class="text-xs text-gray-500 mt-1">Debe ser una ruta absoluta (empieza por / en Linux o C:\ en Windows).</p>
+        </div>
+        <div id="storage-preview" class="hidden text-sm bg-gray-50 border border-gray-200 rounded px-3 py-2"></div>
+        <div id="storage-collisions" class="hidden text-sm bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+        <div id="storage-progress-wrap" class="hidden">
+            <div class="flex justify-between text-xs text-gray-600 mb-1">
+                <span id="storage-progress-label">Moviendo ficheros...</span>
+                <span id="storage-progress-count"></span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="storage-progress-bar" class="bg-sante-primary h-2.5 rounded-full transition-all" style="width:0%"></div>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+            <button onclick="closeStorageModal()" id="storage-cancel-btn" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+            <button onclick="applyStorageChange()" id="storage-apply-btn" class="bg-sante-primary text-white px-5 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Aplicar</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -477,6 +539,7 @@ loadSpecials();
 loadHolidays();
 loadPhysiosForConfig();
 loadGeneralSettings();
+if (role === 'ADMIN') { loadStoragePaths(); }
 
 // --- Horarios de fisios ---
 async function loadPhysiosForConfig() {
@@ -760,6 +823,153 @@ function shutdownSystem() {
         const res = await authFetch('/api/config/shutdown', { method: 'POST' });
         if (res.ok) showToast('Apagando sistema...');
         else showToast('Error al apagar', 'error');
+    });
+}
+
+// --- Almacenamiento ---
+let storageCurrentKey = null;
+let storageCurrentPath = null;
+let storageProgressTimer = null;
+
+async function loadStoragePaths() {
+    const res = await authFetch('/api/config/storage-paths');
+    if (!res.ok) { showToast('Error al cargar rutas', 'error'); return; }
+    const data = await res.json();
+    const body = document.getElementById('storage-body');
+    body.innerHTML = '';
+    data.paths.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t';
+        tr.innerHTML = `
+            <td class="px-3 py-2 font-medium text-gray-700">${p.label}</td>
+            <td class="px-3 py-2 text-gray-600 break-all">${p.path}${p.exists ? '' : ' <span class="text-amber-600 text-xs">(no existe aún)</span>'}</td>
+            <td class="px-3 py-2 text-gray-600">${p.file_count}</td>
+            <td class="px-3 py-2 text-gray-600">${p.free_gb} GB</td>
+            <td class="px-3 py-2 text-right">
+                <button class="text-sante-primary hover:underline text-sm" onclick="openStorageModal('${p.key}', ${JSON.stringify(p.path).replace(/"/g,'&quot;')}, ${JSON.stringify(p.label).replace(/"/g,'&quot;')})">Cambiar</button>
+            </td>`;
+        body.appendChild(tr);
+    });
+}
+
+function openStorageModal(key, path, label) {
+    storageCurrentKey = key;
+    storageCurrentPath = path;
+    document.getElementById('storage-modal-title').textContent = 'Cambiar ubicación: ' + label;
+    document.getElementById('storage-new-path').value = path;
+    document.getElementById('storage-preview').classList.add('hidden');
+    document.getElementById('storage-collisions').classList.add('hidden');
+    document.getElementById('storage-progress-wrap').classList.add('hidden');
+    document.getElementById('storage-apply-btn').disabled = false;
+    document.getElementById('storage-cancel-btn').disabled = false;
+    document.getElementById('storage-modal').classList.remove('hidden');
+}
+
+function closeStorageModal() {
+    if (storageProgressTimer) { clearInterval(storageProgressTimer); storageProgressTimer = null; }
+    document.getElementById('storage-modal').classList.add('hidden');
+}
+
+async function applyStorageChange() {
+    const newPath = document.getElementById('storage-new-path').value.trim();
+    const collisionsBox = document.getElementById('storage-collisions');
+    const previewBox = document.getElementById('storage-preview');
+    collisionsBox.classList.add('hidden');
+    previewBox.classList.add('hidden');
+
+    if (!newPath) { showToast('Indica una ruta', 'error'); return; }
+    if (newPath === storageCurrentPath) { showToast('La ruta es la misma', 'error'); return; }
+
+    const applyBtn = document.getElementById('storage-apply-btn');
+    applyBtn.disabled = true;
+
+    const res = await authFetch('/api/config/storage-paths/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: storageCurrentKey, path: newPath }),
+    });
+
+    if (res.status === 409) {
+        const err = await res.json();
+        const detail = err.detail;
+        if (detail && detail.collisions) {
+            collisionsBox.innerHTML = '<strong>No se puede cambiar la ubicación.</strong><br>' +
+                detail.message + '<br>Ficheros en conflicto (requieren intervención manual):<ul class="list-disc ml-5 mt-1">' +
+                detail.collisions.map(c => `<li>${c}</li>`).join('') + '</ul>';
+        } else {
+            collisionsBox.innerHTML = '<strong>No se puede cambiar la ubicación.</strong><br>' + (typeof detail === 'string' ? detail : JSON.stringify(detail));
+        }
+        collisionsBox.classList.remove('hidden');
+        applyBtn.disabled = false;
+        return;
+    }
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Error al aplicar el cambio', 'error');
+        applyBtn.disabled = false;
+        return;
+    }
+
+    const data = await res.json();
+    if (!data.moved) {
+        // Carpeta vacía o misma: cambio guardado sin mover ficheros.
+        previewBox.textContent = data.message;
+        previewBox.classList.remove('hidden');
+        showToast('Ruta actualizada. Reinicia el servicio para aplicar.');
+        await loadStoragePaths();
+        setTimeout(closeStorageModal, 1500);
+        return;
+    }
+
+    // Hay movimiento: mostrar barra y hacer polling del progreso.
+    document.getElementById('storage-cancel-btn').disabled = true;
+    const wrap = document.getElementById('storage-progress-wrap');
+    wrap.classList.remove('hidden');
+    storageProgressTimer = setInterval(pollStorageProgress, 800);
+}
+
+async function pollStorageProgress() {
+    const res = await authFetch('/api/config/storage-paths/progress');
+    if (!res.ok) return;
+    const st = await res.json();
+    const total = st.total || 0;
+    const done = st.done || 0;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById('storage-progress-bar').style.width = pct + '%';
+    document.getElementById('storage-progress-count').textContent = `${done} / ${total}`;
+    document.getElementById('storage-progress-label').textContent = st.current ? ('Copiando: ' + st.current) : 'Moviendo ficheros...';
+
+    if (st.finished) {
+        clearInterval(storageProgressTimer); storageProgressTimer = null;
+        if (st.success) {
+            showToast('Ficheros movidos. Reinicia el servicio para aplicar.');
+            await loadStoragePaths();
+            setTimeout(closeStorageModal, 1500);
+        } else {
+            const collisionsBox = document.getElementById('storage-collisions');
+            let msg = '<strong>El traslado no se completó.</strong><br>' + (st.error || 'Error desconocido');
+            if (st.collisions && st.collisions.length) {
+                msg += '<ul class="list-disc ml-5 mt-1">' + st.collisions.map(c => `<li>${c}</li>`).join('') + '</ul>';
+            }
+            collisionsBox.innerHTML = msg;
+            collisionsBox.classList.remove('hidden');
+            document.getElementById('storage-progress-wrap').classList.add('hidden');
+            document.getElementById('storage-apply-btn').disabled = false;
+            document.getElementById('storage-cancel-btn').disabled = false;
+        }
+    }
+}
+
+function restartService() {
+    showConfirm('Reiniciar servicio', 'La aplicación se reiniciará y no estará disponible unos segundos. ¿Continuar?', async () => {
+        const res = await authFetch('/api/config/storage-paths/restart-service', { method: 'POST' });
+        if (res.ok) {
+            const data = await res.json();
+            showToast(data.message || 'Reiniciando...');
+        } else {
+            showToast('Error al reiniciar el servicio', 'error');
+        }
     });
 }
 </script>
