@@ -127,22 +127,44 @@ def _decode_signature(data_url: str) -> io.BytesIO | None:
 
 
 def _insert_signature_in_paragraph(paragraph, marker: str, image_stream: io.BytesIO) -> bool:
-    """Si `paragraph` contiene el marcador (p.ej. '{{firma_paciente}}'), lo elimina
-    e inserta la imagen a ancho fijo en su lugar. Devuelve True si insertó."""
-    full_text = "".join(run.text for run in paragraph.runs)
+    """Si `paragraph` contiene el marcador, lo sustituye por la imagen a ancho fijo.
+
+    Inserta la imagen EN el run que contiene el marcador (no en un run nuevo al
+    final), lo que garantiza que el <w:drawing> quede correctamente enlazado en el
+    XML. Soporta que el párrafo tenga varios marcadores en runs distintos (p.ej.
+    firma_paciente y firma_tutor en el mismo párrafo)."""
+    runs = paragraph.runs
+    if not runs:
+        return False
+
+    # Caso 1: el marcador está completo dentro de un único run.
+    for run in runs:
+        if marker in run.text:
+            before, _, after = run.text.partition(marker)
+            run.text = before  # texto anterior al marcador queda en el run
+            image_stream.seek(0)
+            run.add_picture(image_stream, width=Cm(SIGNATURE_WIDTH_CM))
+            # El texto posterior (p.ej. tabulaciones, otro marcador) va a un run nuevo
+            # para no perderlo. Se procesará aparte si contiene otro marcador.
+            if after:
+                paragraph.add_run(after)
+            return True
+
+    # Caso 2: el marcador está partido entre varios runs. Consolidar en el primero.
+    full_text = "".join(r.text for r in runs)
     if marker not in full_text:
         return False
-    # Vaciar el texto del marcador conservando el resto del texto del párrafo.
-    remaining = full_text.replace(marker, "")
-    if paragraph.runs:
-        paragraph.runs[0].text = remaining
-        for run in paragraph.runs[1:]:
-            run.text = ""
-        run = paragraph.add_run()
-    else:
-        run = paragraph.add_run()
+    idx = full_text.index(marker)
+    before = full_text[:idx]
+    after = full_text[idx + len(marker):]
+    first = runs[0]
+    first.text = before
+    for r in runs[1:]:
+        r.text = ""
     image_stream.seek(0)
-    run.add_picture(image_stream, width=Cm(SIGNATURE_WIDTH_CM))
+    first.add_picture(image_stream, width=Cm(SIGNATURE_WIDTH_CM))
+    if after:
+        paragraph.add_run(after)
     return True
 
 
