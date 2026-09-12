@@ -130,19 +130,16 @@ def auto_backup_db():
 
 
 def _reminder_loop():
-    """Loop infinito que ejecuta recordatorios cada hora y backup a las 02:00."""
+    """Loop infinito que ejecuta los recordatorios de citas cada hora.
+
+    NOTA: el backup automático de la BD YA NO se hace aquí. Se hace con un cron del
+    sistema (backup_db.sh) que es fiable y no depende de que la app esté corriendo
+    ni sufre deriva. Ver DESPLIEGUE.md."""
     while True:
         try:
             send_appointment_reminders()
         except Exception as e:
             logger.error(f"Error en loop de recordatorios: {e}")
-        # Hora España (UTC+2)
-        now_spain = datetime.now(timezone.utc) + timedelta(hours=2)
-        if now_spain.hour == 2:
-            try:
-                auto_backup_db()
-            except Exception as e:
-                logger.error(f"Error en backup automático: {e}")
         time.sleep(REMINDER_INTERVAL_SECONDS)
 
 

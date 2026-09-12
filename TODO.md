@@ -242,3 +242,34 @@ Test note content
 - El usuario ejecuta los comandos en la Raspberry (SSH/teclado) y pega la salida; Kiro guía.
 - Confirmar cada paso en producción antes de aplicarlo.
 - Empezar leyendo el código relevante antes de proponer cambios.
+
+
+---
+
+# PENDIENTES ABIERTOS (para próximas sesiones)
+
+- [ ] **Backup automático fiable (cron del sistema)** — El backup diario del código
+  (`auto_backup_db` en `app/reminders.py`) es FRÁGIL: corre en un hilo que cada hora
+  comprueba si `hour == 2`; con reinicios y la deriva del `sleep(3600)` puede saltarse
+  la ventana. Prueba: el `sante_diaria.db` del USB no se actualizaba desde el 27 may.
+  No hay crontab configurado (`crontab -l` vacío). SOLUCIÓN: configurar un cron del
+  sistema (fiable), como el documentado en DESPLIEGUE.md B.11, y decidir si se quita el
+  `auto_backup_db` del bucle para no duplicar. DECISIÓN PENDIENTE DEL USUARIO: ¿la
+  Raspberry queda encendida de noche en la clínica (cron a las 3:00) o se apaga al
+  cerrar (backup en horario de apertura o al arrancar)?
+
+- [ ] **Auto-rotar backups pre-despliegue** — `deploy.sh` acumula un `sante_predeploy_*.db`
+  por cada despliegue. Añadir rotación que conserve solo los últimos N (p.ej. 5).
+
+- [ ] **Marcador de firma del tutor en CI FISIOTERAPIA GENERAL.docx** — Esa plantilla NO
+  tiene `{{firma_tutor}}` (las otras 3 sí). Si se firma con tutor en ese consentimiento,
+  la firma del tutor no se estampará. Añadir el marcador si se quiere coherencia.
+
+## Estado tras sesión 12/09/2026
+
+- Tareas 1-6 del plan COMPLETADAS y desplegadas en producción (Raspberry Pi).
+- Firma manuscrita funcionando end-to-end (verificada en la Pi).
+- BD de producción limpiada: solo pacientes (1840) + usuarios (1) + configuración.
+  Vaciados datos transaccionales (citas, sesiones, facturas, pagos, audit_logs).
+- Tablas residuales eliminadas (migración 0004): `signed_consents`, `clinic_settings`.
+- Migraciones aplicadas en la Pi: 0001, 0002, 0003, 0004.

@@ -299,15 +299,42 @@ sudo nmcli con up "Wired connection 1"
 
 ## B.11 Backup automático diario (cron, opcional)
 
-Complementa al backup que hace `deploy.sh`. Copia la BD al USB cada noche y limpia los antiguos:
+La app YA NO hace el backup automático (antes lo intentaba un hilo interno, poco fiable).
+El backup diario lo hace un **cron del sistema** que ejecuta `backup_db.sh` (incluido en el
+repo). Es fiable, no depende de que la app esté corriendo, y es robusto ante apagones: si un
+día la Raspberry está apagada, ese día no hay copia y al día siguiente se ejecuta con
+normalidad (no se rompe nada).
+
+`backup_db.sh` hace: comprueba que el USB está montado, copia diaria `sante_diaria.db`
+(sobrescribe), copia mensual persistente el día 1 (`sante_mensual_YYYYMM.db`), y rota
+(borra) las mensuales de más de 12 meses. Solo copia el `.db` (los documentos ya viven
+en el USB de forma permanente).
+
+Configuración (una sola vez):
 
 ```bash
+# Dar permiso de ejecución al script
+chmod +x /home/silver/sante/backup_db.sh
+
+# Asegurar que existe la carpeta de logs
+mkdir -p /home/silver/sante/app/logs
+
+# Editar el crontab del usuario silver
 crontab -e
 ```
 
+Añadir esta línea (backup diario a las 3:00, con log):
+
 ```
-0 3 * * * cp /home/silver/sante/sante.db /media/usb/backups/sante_$(date +\%Y\%m\%d).db
-0 4 * * * find /media/usb/backups -name "sante_*.db" -mtime +30 -delete
+0 3 * * * /home/silver/sante/backup_db.sh >> /home/silver/sante/app/logs/backup.log 2>&1
+```
+
+Comprobar que quedó configurado y probar el script a mano:
+
+```bash
+crontab -l                          # debe mostrar la línea
+/home/silver/sante/backup_db.sh     # ejecución manual de prueba
+ls -la /media/usb/backups/          # debe aparecer sante_diaria.db actualizado
 ```
 
 ## B.12 Seguridad básica
