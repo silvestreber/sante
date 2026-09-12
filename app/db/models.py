@@ -337,20 +337,3 @@ class WaitlistEntry(Base):
     patient = relationship("Patient", foreign_keys=[patient_id])
     creator = relationship("User", foreign_keys=[created_by])
 
-
-class SignedConsent(Base):
-    """Registro de consentimientos firmados por pacientes."""
-    __tablename__ = "signed_consents"
-
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
-    template_name = Column(String, nullable=False)
-    pdf_path = Column(String, nullable=False)
-    signed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    signed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    is_revoked = Column(Boolean, default=False)
-    revoked_at = Column(DateTime, nullable=True)
-    revocation_pdf_path = Column(String, nullable=True)
-
-    patient = relationship("Patient", foreign_keys=[patient_id])
-    user = relationship("User", foreign_keys=[signed_by])
