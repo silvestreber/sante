@@ -172,7 +172,37 @@ def _stamp_signature(doc, marker: str, image_stream: io.BytesIO) -> None:
     """Busca el marcador en todo el documento (cuerpo y tablas) y estampa la firma.
     Si la firma no viene (image_stream None), simplemente elimina el marcador."""
     def _clear_marker_text(paragraph):
-        _replace_in_paragraph(paragraph, {marker.strip("{}"): ""})
+        # Eliminar el marcador SIN reescribir runs[0]: si otro run de este párrafo ya
+        # contiene una imagen (p.ej. la firma del paciente), reescribir runs[0].text
+        # destruiría ese drawing. Por eso limpiamos solo el/los runs que contienen el
+        # marcador (o sus trozos), respetando el resto.
+        runs = paragraph.runs
+        full = "".join(r.text for r in runs)
+        if marker not in full:
+            return
+        # Caso simple: el marcador está entero en un run -> quitarlo de ese run.
+        for r in runs:
+            if marker in r.text:
+                r.text = r.text.replace(marker, "")
+                return
+        # Caso partido: eliminar el marcador repartido entre runs consecutivos,
+        # tocando solo esos runs (no runs[0] indiscriminadamente).
+        acc = ""
+        start = None
+        for i, r in enumerate(runs):
+            if start is None and (marker.startswith(r.text) or r.text and r.text in marker):
+                start = i
+                acc = r.text
+            elif start is not None:
+                acc += r.text
+            if start is not None and marker in acc:
+                # Limpiar el texto de los runs implicados conservando lo de fuera del marcador.
+                combined = "".join(runs[j].text for j in range(start, i + 1))
+                cleaned = combined.replace(marker, "")
+                runs[start].text = cleaned
+                for j in range(start + 1, i + 1):
+                    runs[j].text = ""
+                return
 
     if image_stream is None:
         # Sin firma: limpiar el marcador dejándolo vacío.
