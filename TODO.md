@@ -198,7 +198,13 @@ Test note content
     LibreOffice se probará en la Pi (en Windows la conversión no está disponible). Suite de tests OK
     (86 pasan; los de firma se saltan en Windows).
 
-- [ ] **6. Firma manuscrita de consentimientos (en tablet/móvil/ratón)**
+- [x] **6. Firma manuscrita de consentimientos (en tablet/móvil/ratón)** — COMPLETADO
+  Implementado: canvas de firma grande en el modal (dedo/ratón vía pointer events), la firma se estampa
+  DENTRO del PDF a ancho fijo (5 cm) sustituyendo los marcadores `{{firma_paciente}}` y `{{firma_tutor}}`
+  de las plantillas (no se guarda imagen aparte). Firma del paciente siempre; la del tutor solo si se
+  rellenan datos de tutor. Los .docx llevan los marcadores. Desplegado en la Pi (blank PDFs regenerados).
+  Además se corrigió que `generate_blank_pdfs()` bloqueaba el arranque: ahora corre en hilo aparte.
+  (Spec original del enfoque debajo, como referencia.)
   Objetivo: poder firmar FÍSICAMENTE el consentimiento en el mismo acto, capturando la firma en un
   recuadro y estampándola en el PDF. El uso principal será con tablet (firma con el dedo), pero debe
   funcionar también con ratón (escritorio) y en móvil.

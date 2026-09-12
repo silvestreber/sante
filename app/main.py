@@ -26,16 +26,26 @@ logging.basicConfig(
 )
 
 
+def _generate_blank_pdfs_bg():
+    """Genera los PDFs en blanco de las plantillas. Se ejecuta en segundo plano
+    para NO bloquear el arranque de la app (LibreOffice puede tardar >1 min en la
+    Raspberry la primera vez). Los que ya existen se saltan."""
+    try:
+        from app.consent_generator import generate_blank_pdfs
+        generate_blank_pdfs()
+        logging.info("PDFs en blanco de consentimientos generados.")
+    except Exception as e:
+        logging.error(f"Error generando PDFs en blanco: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     start_reminder_scheduler()
-    # Generar PDFs en blanco de plantillas de consentimiento
-    try:
-        from app.consent_generator import generate_blank_pdfs
-        generate_blank_pdfs()
-    except Exception as e:
-        logging.error(f"Error generando PDFs en blanco: {e}")
+    # Generar PDFs en blanco en un hilo aparte: la app responde de inmediato y la
+    # generación (lenta con LibreOffice) ocurre por detrás sin bloquear el arranque.
+    import threading
+    threading.Thread(target=_generate_blank_pdfs_bg, daemon=True).start()
     yield
 
 
