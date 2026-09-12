@@ -244,6 +244,16 @@ def fill_consent_template(template_filename: str, data: dict, output_dir: str) -
         "ano_revoc": data.get("ano_revoc", "") or BLANK_YEAR,
     }
 
+    # --- Firmas manuscritas (imágenes) PRIMERO ---
+    # IMPORTANTE: se estampan ANTES de los reemplazos de texto. `_replace_in_paragraph`
+    # consolida los runs de cualquier párrafo con "{{", lo que destruiría el run del
+    # marcador de firma y haría que add_picture no anclara bien el <w:drawing>.
+    # Al estampar primero (con los runs intactos) y sustituir el marcador por la
+    # imagen, el párrafo deja de tener "{{firma_...}}" y el reemplazo de texto posterior
+    # ya no lo toca. La firma del paciente es siempre; la del tutor solo si viene.
+    _stamp_signature(doc, "{{firma_paciente}}", _decode_signature(data.get("firma_paciente")))
+    _stamp_signature(doc, "{{firma_tutor}}", _decode_signature(data.get("firma_tutor")))
+
     for paragraph in doc.paragraphs:
         _replace_in_paragraph(paragraph, replacements)
 
@@ -262,12 +272,6 @@ def fill_consent_template(template_filename: str, data: dict, output_dir: str) -
             if footer:
                 for p in footer.paragraphs:
                     _replace_in_paragraph(p, replacements)
-
-    # --- Firmas manuscritas (imágenes) ---
-    # La firma del paciente es siempre; la del tutor solo si viene (hay datos de tutor).
-    # Si un marcador existe pero no hay firma, se limpia (queda vacío).
-    _stamp_signature(doc, "{{firma_paciente}}", _decode_signature(data.get("firma_paciente")))
-    _stamp_signature(doc, "{{firma_tutor}}", _decode_signature(data.get("firma_tutor")))
 
     os.makedirs(output_dir, exist_ok=True)
     safe_name = re.sub(r'[^\w\-]', '_', data.get("nombre_paciente", "paciente"))
