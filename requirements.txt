@@ -10,6 +10,7 @@ fpdf2
 markdown
 python-docx
 docx2pdf; sys_platform == "win32"
+Pillow
 pytest
 httpx
 

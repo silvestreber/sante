@@ -88,10 +88,14 @@ def _replace_in_paragraph(paragraph, replacements: dict):
 
 
 def _decode_signature(data_url: str) -> io.BytesIO | None:
-    """Decodifica una firma en formato dataURL/base64 a un stream PNG.
+    """Decodifica una firma en formato dataURL/base64 a un stream PNG listo para insertar.
 
     Acepta tanto 'data:image/png;base64,XXXX' como el base64 pelado. Devuelve
-    None si la entrada está vacía o no es válida."""
+    None si la entrada está vacía o no es válida.
+
+    IMPORTANTE: el canvas exporta la firma con fondo TRANSPARENTE (RGBA). LibreOffice
+    headless renderiza mal la transparencia al convertir a PDF (la firma desaparece).
+    Por eso aplanamos la imagen sobre fondo BLANCO opaco, así el PDF la muestra bien."""
     if not data_url:
         return None
     try:
@@ -99,9 +103,27 @@ def _decode_signature(data_url: str) -> io.BytesIO | None:
         raw = base64.b64decode(b64)
         if not raw:
             return None
-        return io.BytesIO(raw)
     except Exception:
         return None
+
+    # Aplanar sobre fondo blanco (elimina el canal alfa que LibreOffice no renderiza bien).
+    try:
+        from PIL import Image
+        src = Image.open(io.BytesIO(raw))
+        if src.mode in ("RGBA", "LA") or (src.mode == "P" and "transparency" in src.info):
+            src = src.convert("RGBA")
+            bg = Image.new("RGB", src.size, (255, 255, 255))
+            bg.paste(src, mask=src.split()[-1])  # usar el canal alfa como máscara
+            flat = bg
+        else:
+            flat = src.convert("RGB")
+        out = io.BytesIO()
+        flat.save(out, format="PNG")
+        out.seek(0)
+        return out
+    except Exception:
+        # Si PIL no está disponible o falla, devolver el PNG original tal cual.
+        return io.BytesIO(raw)
 
 
 def _insert_signature_in_paragraph(paragraph, marker: str, image_stream: io.BytesIO) -> bool:
