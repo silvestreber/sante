@@ -1,6 +1,7 @@
 import io
 import os
 import io
+import logging
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -8,11 +9,18 @@ from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
+
 from app.auth import get_current_user, require_role
 from app.audit_log import log_action
 from app.db.database import get_db
 from app.db.models import Invoice, Patient, PatientDocument, User, UserRole
+from app.email_service import send_email_with_attachment
 from app.storage import abs_path, get_patient_docs_path, unique_name
+
+
+class DocEmailRequest(BaseModel):
+    email: str | None = None
 
 
 def _doc_abs_path(db: Session, doc: PatientDocument) -> str | None:
@@ -186,36 +194,68 @@ def update_patient(
     return {"message": "Paciente actualizado"}
 
 
+@router.get("/{patient_id}/documents")
+def list_documents(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista TODOS los documentos del paciente (subidos, consentimientos firmados,
+    revocaciones... todo unificado), ordenados por fecha descendente."""
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+    docs = (
+        db.query(PatientDocument)
+        .filter(PatientDocument.patient_id == patient_id)
+        .order_by(PatientDocument.uploaded_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": d.id,
+            "filename": d.filename,
+            "description": d.description,
+            "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
+            # is_pdf permite al front decidir: abrir en pestaña (PDF) o descargar (otro).
+            "is_pdf": (d.filename or "").lower().endswith(".pdf"),
+        }
+        for d in docs
+    ]
+
+
 @router.post("/{patient_id}/documents", status_code=201)
 def upload_document(
     patient_id: int,
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     description: str = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Sube uno o varios documentos a la vez. Cada fichero se guarda con un nombre
+    único en disco; en BD se conserva el nombre original para mostrarlo."""
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
-    base = get_patient_docs_path(db)
-    ext = os.path.splitext(file.filename)[1] if file.filename else ""
-    # Nombre único global: prefijo + id de paciente para trazabilidad.
-    stored_name = unique_name(f"p{patient_id}", ext)
-    filepath = os.path.join(base, stored_name)
-
-    with open(filepath, "wb") as f:
-        f.write(file.file.read())
-
-    doc = PatientDocument(
-        patient_id=patient_id,
-        filename=file.filename or stored_name,
-        filepath=stored_name,  # ruta relativa (base en Config)
-        description=description.strip() if description else None,
-    )
-    db.add(doc)
+    base = get_patient_docs_path(db)  # exige USB montado (lanza 503 si no)
+    saved = 0
+    for file in files:
+        ext = os.path.splitext(file.filename)[1] if file.filename else ""
+        stored_name = unique_name(f"p{patient_id}", ext)
+        filepath = os.path.join(base, stored_name)
+        with open(filepath, "wb") as f:
+            f.write(file.file.read())
+        doc = PatientDocument(
+            patient_id=patient_id,
+            filename=file.filename or stored_name,
+            filepath=stored_name,  # ruta relativa (base en Config)
+            description=description.strip() if description else None,
+        )
+        db.add(doc)
+        saved += 1
     db.commit()
-    return {"message": "Documento subido"}
+    return {"message": f"{saved} documento(s) subido(s)", "count": saved}
 
 
 @router.get("/{patient_id}/documents/{doc_id}/download")
@@ -277,6 +317,46 @@ def delete_document(
     db.commit()
     log_action(db, current_user.id, "ELIMINAR", "DOCUMENTO", doc_id, f"Paciente {patient_id}")
     return {"message": "Documento eliminado"}
+
+
+@router.post("/{patient_id}/documents/{doc_id}/email")
+def email_document(
+    patient_id: int,
+    doc_id: int,
+    body: DocEmailRequest = DocEmailRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Envía un documento del paciente por email (cualquier tipo de fichero)."""
+    doc = db.query(PatientDocument).filter(
+        PatientDocument.id == doc_id, PatientDocument.patient_id == patient_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    to_email = body.email or (patient.email if patient else None)
+    if not to_email:
+        raise HTTPException(status_code=400, detail="El paciente no tiene email registrado")
+
+    path = _doc_abs_path(db, doc)
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Fichero no encontrado")
+
+    clinic = os.getenv("CLINIC_NAME", "Santé")
+    try:
+        send_email_with_attachment(
+            to_email=to_email,
+            subject=f"Documento - {clinic}",
+            body=f"Adjunto encontrará el documento solicitado.\n\nUn saludo,\n{clinic}",
+            attachment_path=path,
+            attachment_filename=doc.filename,
+        )
+    except Exception as e:
+        logging.error(f"Error enviando email de documento: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al enviar email: {str(e)}")
+
+    return {"message": f"Email enviado a {to_email}"}
 
 
 @router.patch("/{patient_id}/deactivate")

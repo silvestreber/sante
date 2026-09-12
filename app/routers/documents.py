@@ -10,20 +10,8 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.consent_generator import MESES
 from app.db.database import get_db
-from app.db.models import Invoice, Patient, SignedConsent, Treatment, User
+from app.db.models import Invoice, Patient, PatientDocument, Treatment, User
 from app.email_service import send_email_with_attachment
-from app.storage import abs_path, get_signed_docs_path
-
-
-def _consent_abs_path(db: Session, relative_name: str | None) -> str | None:
-    """Reconstruye la ruta absoluta de un PDF de consentimiento a partir del
-    nombre relativo guardado en BD y la carpeta base configurada."""
-    if not relative_name:
-        return None
-    # Compatibilidad: si en BD hubiera una ruta absoluta antigua, respetarla.
-    if os.path.isabs(relative_name):
-        return relative_name
-    return abs_path(get_signed_docs_path(db, ensure=False, check_mount=False), relative_name)
 from app.pdf import (
     generate_attendance_pdf,
     generate_consent_pdf,
@@ -257,10 +245,9 @@ class ConsentSignRequest(BaseModel):
     observaciones: str | None = None
     patologia_paciente: str | None = None
     dni_paciente: str | None = None
-
-
-class ConsentRevokeRequest(BaseModel):
-    nombre_revocante: str
+    # Revocación: si es True, se genera un documento de revocación en vez de una firma.
+    is_revocacion: bool = False
+    nombre_revocante: str | None = None
     observaciones_revoc: str | None = None
 
 
@@ -270,15 +257,9 @@ def list_consent_templates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista las plantillas de consentimiento disponibles (.docx), excluyendo las ya firmadas del desplegable."""
+    """Lista las plantillas de consentimiento disponibles (.docx). Ya no se
+    excluye ninguna: un paciente puede tener varios documentos del mismo tipo."""
     templates = [f for f in os.listdir(DOCS_PATH) if f.endswith('.docx') and not f.startswith('~$')]
-    if patient_id:
-        signed = db.query(SignedConsent.template_name).filter(
-            SignedConsent.patient_id == patient_id,
-            SignedConsent.is_revoked == False,
-        ).all()
-        signed_names = {s[0] for s in signed}
-        templates = [f for f in templates if f not in signed_names]
     return [{"filename": f, "name": f.replace('.docx', '')} for f in sorted(templates)]
 
 
@@ -295,57 +276,6 @@ def view_template_pdf(
     return FileResponse(pdf_path, media_type="application/pdf")
 
 
-@router.get("/all-consents/{patient_id}")
-def list_all_consents(
-    patient_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Lista todas las plantillas con su estado de firma para un paciente."""
-    templates = [f for f in os.listdir(DOCS_PATH) if f.endswith('.docx') and not f.startswith('~$')]
-    signed = db.query(SignedConsent).filter(
-        SignedConsent.patient_id == patient_id,
-    ).all()
-    # Mapear: prioridad vigente > revocado
-    signed_map = {}
-    for c in signed:
-        existing = signed_map.get(c.template_name)
-        if not existing or (not c.is_revoked and existing.is_revoked):
-            signed_map[c.template_name] = c
-
-    result = []
-    for f in sorted(templates):
-        consent = signed_map.get(f)
-        if consent and not consent.is_revoked:
-            result.append({
-                "template_name": f.replace('.docx', ''),
-                "filename": f,
-                "status": "signed",
-                "id": consent.id,
-                "signed_at": consent.signed_at.isoformat() if consent.signed_at else None,
-                "revoked_at": None,
-            })
-        elif consent and consent.is_revoked:
-            result.append({
-                "template_name": f.replace('.docx', ''),
-                "filename": f,
-                "status": "revoked",
-                "id": consent.id,
-                "signed_at": None,
-                "revoked_at": consent.revoked_at.isoformat() if consent.revoked_at else None,
-            })
-        else:
-            result.append({
-                "template_name": f.replace('.docx', ''),
-                "filename": f,
-                "status": "unsigned",
-                "id": None,
-                "signed_at": None,
-                "revoked_at": None,
-            })
-    return result
-
-
 @router.post("/consent-sign/{patient_id}")
 def sign_consent(
     patient_id: int,
@@ -354,223 +284,77 @@ def sign_consent(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Genera un consentimiento firmado con los datos del paciente."""
+    """Genera un documento de consentimiento (o su revocación) a partir de una
+    plantilla y lo guarda como un DOCUMENTO más del paciente (patient_documents).
+
+    Ya no hay estado 'firmado/revocado': cada generación crea un documento
+    independiente que aparece en la lista unificada de documentos del paciente.
+    """
     from app.consent_generator import generate_signed_consent
+    from app.storage import get_patient_docs_path
 
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
-    # Comprobar si ya tiene este consentimiento firmado (no revocado)
-    existing = db.query(SignedConsent).filter(
-        SignedConsent.patient_id == patient_id,
-        SignedConsent.template_name == template,
-        SignedConsent.is_revoked == False,
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Este consentimiento ya está firmado. Para modificarlo, revóquelo primero.")
+    now = datetime.now(timezone.utc) + timedelta(hours=2)
+    nombre_paciente = f"{patient.first_name} {patient.last_name}"
+    base_label = template.replace('.docx', '')
 
-    # Si hay uno revocado, eliminar registro y PDFs
-    revoked = db.query(SignedConsent).filter(
-        SignedConsent.patient_id == patient_id,
-        SignedConsent.template_name == template,
-        SignedConsent.is_revoked == True,
-    ).all()
-    for r in revoked:
-        for rel in [r.pdf_path, r.revocation_pdf_path]:
-            path = _consent_abs_path(db, rel)
-            if path and os.path.exists(path):
-                try:
-                    os.unlink(path)
-                except OSError:
-                    pass
-        db.delete(r)
-    if revoked:
-        db.flush()
+    if data.is_revocacion:
+        # Documento de revocación: campos de revocación rellenos, originales vacíos.
+        template_data = {
+            "nombre_paciente": nombre_paciente,
+            "dni_paciente": data.dni_paciente or patient.dni or "",
+            "nombre_tutor": "", "relacion_tutor": "", "dni_tutor": "",
+            "fisio_firma": "", "dni_fisio_firma": "", "ud_fisioterapia": "",
+            "patología_paciente": "",
+            "nombre_tutor_revoc": data.nombre_revocante or nombre_paciente,
+            "nombre_paciente_revoc": nombre_paciente,
+            "observaciones_revoc": data.observaciones_revoc or "",
+            "dia_revoc": str(now.day),
+            "mes_revoc": MESES[now.month],
+            "ano_revoc": str(now.year),
+            "_suffix": "_revocacion",
+        }
+        display_name = f"Revocación - {base_label} - {nombre_paciente}.pdf"
+    else:
+        template_data = {
+            "nombre_paciente": nombre_paciente,
+            "dni_paciente": data.dni_paciente or patient.dni or "",
+            "nombre_tutor": data.nombre_tutor or "",
+            "relacion_tutor": data.relacion_tutor or "",
+            "dni_tutor": data.dni_tutor or "",
+            "fisio_firma": data.fisio_firma or "",
+            "dni_fisio_firma": data.dni_fisio_firma or "",
+            "ud_fisioterapia": data.ud_fisioterapia or "",
+            "observaciones": data.observaciones or "",
+            "patología_paciente": data.patologia_paciente or "",
+        }
+        display_name = f"{base_label} - {nombre_paciente}.pdf"
 
-    template_data = {
-        "nombre_paciente": f"{patient.first_name} {patient.last_name}",
-        "dni_paciente": data.dni_paciente or patient.dni or "",
-        "nombre_tutor": data.nombre_tutor or "",
-        "relacion_tutor": data.relacion_tutor or "",
-        "dni_tutor": data.dni_tutor or "",
-        "fisio_firma": data.fisio_firma or "",
-        "dni_fisio_firma": data.dni_fisio_firma or "",
-        "ud_fisioterapia": data.ud_fisioterapia or "",
-        "observaciones": data.observaciones or "",
-        "patología_paciente": data.patologia_paciente or "",
-    }
-
-    output_dir = get_signed_docs_path(db)
+    # Generar el PDF en la carpeta unificada de documentos del paciente.
+    output_dir = get_patient_docs_path(db)  # exige USB montado (lanza 503 si no)
     try:
         _, pdf_rel = generate_signed_consent(template, template_data, output_dir)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada")
     except Exception as e:
-        logging.error(f"Error generando consentimiento: {e}")
+        logging.error(f"Error generando documento: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar documento: {str(e)}")
 
-    now_spain = datetime.now(timezone.utc) + timedelta(hours=2)
-    consent = SignedConsent(
+    # Registrar como documento del paciente (nombre mostrado = display_name).
+    doc = PatientDocument(
         patient_id=patient_id,
-        template_name=template,
-        pdf_path=pdf_rel,
-        signed_by=current_user.id,
-        signed_at=now_spain,
+        filename=display_name,
+        filepath=pdf_rel,  # nombre único en disco (relativo a patient_docs)
+        description=None,
     )
-    db.add(consent)
+    db.add(doc)
     db.commit()
-    db.refresh(consent)
+    db.refresh(doc)
 
-    return {"id": consent.id, "pdf_path": pdf_rel, "message": "Consentimiento firmado"}
-
-
-@router.post("/consent-revoke/{patient_id}/{consent_id}")
-def revoke_consent(
-    patient_id: int,
-    consent_id: int,
-    data: ConsentRevokeRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Revoca un consentimiento firmado generando un nuevo documento con los datos de revocación."""
-    from app.consent_generator import generate_signed_consent
-
-    consent = db.query(SignedConsent).filter(
-        SignedConsent.id == consent_id,
-        SignedConsent.patient_id == patient_id,
-        SignedConsent.is_revoked == False,
-    ).first()
-    if not consent:
-        raise HTTPException(status_code=404, detail="Consentimiento no encontrado o ya revocado")
-
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    now = datetime.now(timezone.utc) + timedelta(hours=2)
-
-    # Fecha de firma original del consentimiento
-    signed_date = consent.signed_at + timedelta(hours=2) if consent.signed_at else now
-
-    template_data = {
-        "nombre_paciente": f"{patient.first_name} {patient.last_name}",
-        "dni_paciente": patient.dni or "",
-        "nombre_tutor": "",
-        "relacion_tutor": "",
-        "dni_tutor": "",
-        "fisio_firma": "",
-        "dni_fisio_firma": "",
-        "ud_fisioterapia": "",
-        "patología_paciente": "",
-        # Campos de revocación
-        "nombre_tutor_revoc": data.nombre_revocante,
-        "nombre_paciente_revoc": f"{patient.first_name} {patient.last_name}",
-        "dia_firma_original": str(signed_date.day),
-        "mes_num_firma_original": str(signed_date.month).zfill(2),
-        "ano_firma_original": str(signed_date.year),
-        "observaciones_revoc": data.observaciones_revoc or "",
-        "dia_revoc": str(now.day),
-        "mes_revoc": MESES[now.month],
-        "ano_revoc": str(now.year),
-        "_suffix": "_revocacion",
-    }
-
-    output_dir = get_signed_docs_path(db)
-    try:
-        _, pdf_rel = generate_signed_consent(consent.template_name, template_data, output_dir)
-    except Exception as e:
-        logging.error(f"Error generando revocación: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al generar documento: {str(e)}")
-
-    # Marcar el original como revocado
-    consent.is_revoked = True
-    consent.revoked_at = now
-    consent.revocation_pdf_path = pdf_rel
-    db.commit()
-
-    return {"message": "Consentimiento revocado", "pdf_path": pdf_rel}
-
-
-@router.get("/signed-consents/{patient_id}")
-def list_signed_consents(
-    patient_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Lista los consentimientos firmados de un paciente."""
-    consents = db.query(SignedConsent).filter(
-        SignedConsent.patient_id == patient_id
-    ).order_by(SignedConsent.signed_at.desc()).all()
-    return [
-        {
-            "id": c.id,
-            "template_name": c.template_name.replace('.docx', ''),
-            "signed_at": c.signed_at.isoformat() if c.signed_at else None,
-            "pdf_path": c.pdf_path,
-            "is_revoked": c.is_revoked,
-            "revoked_at": c.revoked_at.isoformat() if c.revoked_at else None,
-            "revocation_pdf_path": c.revocation_pdf_path,
-        }
-        for c in consents
-    ]
-
-
-@router.get("/signed-consents/{patient_id}/{consent_id}/pdf")
-def view_signed_consent_pdf(
-    patient_id: int,
-    consent_id: int,
-    type: str | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    consent = db.query(SignedConsent).filter(
-        SignedConsent.id == consent_id,
-        SignedConsent.patient_id == patient_id,
-    ).first()
-    if not consent:
-        raise HTTPException(status_code=404, detail="Consentimiento no encontrado")
-    rel = consent.revocation_pdf_path if type == "revocation" else consent.pdf_path
-    pdf_path = _consent_abs_path(db, rel)
-    if not pdf_path or not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF no encontrado")
-    return FileResponse(pdf_path, media_type="application/pdf")
-
-
-@router.post("/signed-consents/{patient_id}/{consent_id}/email")
-def email_signed_consent(
-    patient_id: int,
-    consent_id: int,
-    body: EmailRequest = EmailRequest(),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    consent = db.query(SignedConsent).filter(
-        SignedConsent.id == consent_id,
-        SignedConsent.patient_id == patient_id,
-    ).first()
-    if not consent:
-        raise HTTPException(status_code=404, detail="Consentimiento no encontrado")
-
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    to_email = body.email or (patient.email if patient else None)
-    if not to_email:
-        raise HTTPException(status_code=400, detail="El paciente no tiene email registrado")
-
-    consent_pdf_path = _consent_abs_path(db, consent.pdf_path)
-    if not consent_pdf_path or not os.path.exists(consent_pdf_path):
-        raise HTTPException(status_code=404, detail="PDF no encontrado")
-
-    try:
-        send_email_with_attachment(
-            to_email=to_email,
-            subject=f"Consentimiento informado - {os.getenv('CLINIC_NAME', 'Santé')}",
-            body=f"Adjunto encontrará su consentimiento informado firmado.\n\nUn saludo,\n{os.getenv('CLINIC_NAME', 'Santé Fisioterapia')}",
-            attachment_path=consent_pdf_path,
-            attachment_filename=os.path.basename(consent_pdf_path),
-        )
-    except Exception as e:
-        logging.error(f"Error enviando email: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al enviar email: {str(e)}")
-
-    return {"message": f"Email enviado a {to_email}"}
+    return {"id": doc.id, "filename": display_name, "message": "Documento generado"}
 
 
 # --- Attendance certificate ---

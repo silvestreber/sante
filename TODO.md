@@ -177,15 +177,26 @@ Test note content
   - Facturas/tratamientos usan FPDF (multiplataforma), ya funcionaban. Esto desbloquea la FIRMA DE
     CONSENTIMIENTOS y la generación de PDFs en blanco en la Pi.
 
-- [ ] **5. Carpeta compartida Mac ↔ USB de la Raspberry**
-  Estudiar la viabilidad de una carpeta compartida en el Mac enlazada directamente con la unidad
-  externa (USB) de la Raspberry, de forma bidireccional: soltar documentos en la carpeta del Mac y que
-  aparezcan en la Raspberry, y traer documentos de la Raspberry al Mac. Objetivo: manipular los
-  documentos de forma masiva y cómoda, sin tener que hacerlo uno a uno por la app (cada documento está
-  asociado a un usuario/paciente). Opciones a evaluar: Samba (SMB, nativo en macOS Finder "Conectar a
-  servidor" `smb://192.168.0.100`), o `rsync`/`scp` para sincronización puntual. Considerar seguridad
-  (son datos de salud): acceso solo en red local, credenciales, permisos de usuario `silver`, y que
-  NO se rompa el enlace `media-usb.mount` ni los permisos que la app necesita para escribir.
+- [x] **5. Gestión de documentos del paciente (unificada)** — COMPLETADO
+  DECISIÓN: se descartó la carpeta compartida por red (Samba/rsync) por el problema de asociar
+  documentos sueltos a su paciente y por seguridad (datos de salud). En su lugar, TODO se gestiona
+  desde la app, subiendo desde la ficha del paciente (así siempre se sabe de quién es).
+  Implementado:
+  - Documentos y consentimientos UNIFICADOS en la tabla `patient_documents`. Se eliminó la lógica de
+    estados (firmado/vigente/revocado) y los endpoints all-consents, consent-revoke, signed-consents.
+    `SignedConsent` queda sin uso (tabla vacía). Migración `0003_unificar_documentos` (idempotente).
+  - Vista "Documentos": una sola lista con el nombre de cada documento. Nombre clicable: si es PDF se
+    abre en pestaña nueva, si es otro tipo se descarga. Acciones: enviar por email y eliminar (borra
+    BD + fichero del disco, con confirmación).
+  - Subida MÚLTIPLE con arrastrar y soltar: lista previa (nombre + X para quitar), botón subir, barra
+    de progreso y confirmación. Descripción ya no obligatoria. Nombre único interno en disco.
+  - Firmar consentimiento: se mantiene, y ahora crea un documento más. Incluye opción "Generar
+    documento de revocación" (campos de revocación rellenos, originales vacíos) como una variante.
+  - WhatsApp descartado para documentos: WhatsApp Web solo permite texto, no adjuntar ficheros por URL
+    (requeriría Business API); enviar un enlace sería un riesgo de privacidad. Solo email.
+  - Verificado en local: subida múltiple, abrir PDF, descargar otro tipo, eliminar, email. Firma con
+    LibreOffice se probará en la Pi (en Windows la conversión no está disponible). Suite de tests OK
+    (86 pasan; los de firma se saltan en Windows).
 
 - [ ] **6. Firma manuscrita de consentimientos (en tablet/móvil/ratón)**
   Objetivo: poder firmar FÍSICAMENTE el consentimiento en el mismo acto, capturando la firma en un
