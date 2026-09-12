@@ -249,6 +249,10 @@ class ConsentSignRequest(BaseModel):
     is_revocacion: bool = False
     nombre_revocante: str | None = None
     observaciones_revoc: str | None = None
+    # Firmas manuscritas (PNG en dataURL/base64). La del paciente es obligatoria al
+    # firmar; la del tutor solo si se rellenan datos de tutor.
+    firma_paciente: str | None = None
+    firma_tutor: str | None = None
 
 
 @router.get("/consent-templates")
@@ -319,6 +323,13 @@ def sign_consent(
         }
         display_name = f"Revocación - {base_label} - {nombre_paciente}.pdf"
     else:
+        # Validación de firmas: la del paciente siempre; la del tutor si hay tutor.
+        has_tutor = bool(data.nombre_tutor and data.nombre_tutor.strip())
+        if not data.firma_paciente:
+            raise HTTPException(status_code=400, detail="Falta la firma del paciente.")
+        if has_tutor and not data.firma_tutor:
+            raise HTTPException(status_code=400, detail="Falta la firma del tutor/representante.")
+
         template_data = {
             "nombre_paciente": nombre_paciente,
             "dni_paciente": data.dni_paciente or patient.dni or "",
@@ -330,6 +341,9 @@ def sign_consent(
             "ud_fisioterapia": data.ud_fisioterapia or "",
             "observaciones": data.observaciones or "",
             "patología_paciente": data.patologia_paciente or "",
+            # Firmas manuscritas (imágenes). La del tutor solo si hay tutor.
+            "firma_paciente": data.firma_paciente,
+            "firma_tutor": data.firma_tutor if has_tutor else None,
         }
         display_name = f"{base_label} - {nombre_paciente}.pdf"
 

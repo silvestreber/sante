@@ -1,4 +1,6 @@
 """Genera documentos de consentimiento rellenando plantillas .docx con datos del paciente."""
+import base64
+import io
 import os
 import re
 import shutil
@@ -7,8 +9,13 @@ import sys
 import tempfile
 from datetime import datetime, timezone, timedelta
 from docx import Document
+from docx.shared import Cm
 
 from app.storage import unique_name
+
+# Ancho fijo de la firma en el documento (cm). La firma se escala SIEMPRE a este
+# ancho, independientemente del tamaño con que se dibuje en el canvas.
+SIGNATURE_WIDTH_CM = 5.0
 
 TEMPLATES_PATH = os.path.join(os.path.dirname(__file__), 'static', 'docs')
 BLANK_PDFS_PATH = os.path.join(os.path.dirname(__file__), 'static', 'docs', 'blank_pdfs')
@@ -58,6 +65,9 @@ BLANK_REPLACEMENTS = {
     "dia_revoc": BLANK_DAY,
     "mes_revoc": BLANK_MONTH,
     "ano_revoc": BLANK_YEAR,
+    # Marcadores de firma manuscrita: en el PDF en blanco quedan vacíos (sin firma).
+    "firma_paciente": "",
+    "firma_tutor": "",
 }
 
 
@@ -75,6 +85,72 @@ def _replace_in_paragraph(paragraph, replacements: dict):
         paragraph.runs[0].text = full_text
         for run in paragraph.runs[1:]:
             run.text = ""
+
+
+def _decode_signature(data_url: str) -> io.BytesIO | None:
+    """Decodifica una firma en formato dataURL/base64 a un stream PNG.
+
+    Acepta tanto 'data:image/png;base64,XXXX' como el base64 pelado. Devuelve
+    None si la entrada está vacía o no es válida."""
+    if not data_url:
+        return None
+    try:
+        b64 = data_url.split(",", 1)[1] if "," in data_url else data_url
+        raw = base64.b64decode(b64)
+        if not raw:
+            return None
+        return io.BytesIO(raw)
+    except Exception:
+        return None
+
+
+def _insert_signature_in_paragraph(paragraph, marker: str, image_stream: io.BytesIO) -> bool:
+    """Si `paragraph` contiene el marcador (p.ej. '{{firma_paciente}}'), lo elimina
+    e inserta la imagen a ancho fijo en su lugar. Devuelve True si insertó."""
+    full_text = "".join(run.text for run in paragraph.runs)
+    if marker not in full_text:
+        return False
+    # Vaciar el texto del marcador conservando el resto del texto del párrafo.
+    remaining = full_text.replace(marker, "")
+    if paragraph.runs:
+        paragraph.runs[0].text = remaining
+        for run in paragraph.runs[1:]:
+            run.text = ""
+        run = paragraph.add_run()
+    else:
+        run = paragraph.add_run()
+    image_stream.seek(0)
+    run.add_picture(image_stream, width=Cm(SIGNATURE_WIDTH_CM))
+    return True
+
+
+def _stamp_signature(doc, marker: str, image_stream: io.BytesIO) -> None:
+    """Busca el marcador en todo el documento (cuerpo y tablas) y estampa la firma.
+    Si la firma no viene (image_stream None), simplemente elimina el marcador."""
+    def _clear_marker_text(paragraph):
+        _replace_in_paragraph(paragraph, {marker.strip("{}"): ""})
+
+    if image_stream is None:
+        # Sin firma: limpiar el marcador dejándolo vacío.
+        for p in doc.paragraphs:
+            _clear_marker_text(p)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        _clear_marker_text(p)
+        return
+
+    # Con firma: insertar la imagen en el primer párrafo que tenga el marcador.
+    for p in doc.paragraphs:
+        if _insert_signature_in_paragraph(p, marker, image_stream):
+            return
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    if _insert_signature_in_paragraph(p, marker, image_stream):
+                        return
 
 
 def fill_consent_template(template_filename: str, data: dict, output_dir: str) -> str:
@@ -142,6 +218,12 @@ def fill_consent_template(template_filename: str, data: dict, output_dir: str) -
             if footer:
                 for p in footer.paragraphs:
                     _replace_in_paragraph(p, replacements)
+
+    # --- Firmas manuscritas (imágenes) ---
+    # La firma del paciente es siempre; la del tutor solo si viene (hay datos de tutor).
+    # Si un marcador existe pero no hay firma, se limpia (queda vacío).
+    _stamp_signature(doc, "{{firma_paciente}}", _decode_signature(data.get("firma_paciente")))
+    _stamp_signature(doc, "{{firma_tutor}}", _decode_signature(data.get("firma_tutor")))
 
     os.makedirs(output_dir, exist_ok=True)
     safe_name = re.sub(r'[^\w\-]', '_', data.get("nombre_paciente", "paciente"))

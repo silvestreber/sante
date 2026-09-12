@@ -60,7 +60,7 @@
 
     <!-- Modal firmar consentimiento -->
     <div id="consent-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Firmar consentimiento</h2>
             <form id="consent-form" class="space-y-3">
                 <div>
@@ -76,6 +76,16 @@
                     <input type="text" id="cs-dni-paciente" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" placeholder="Obligatorio para el documento">
                 </div>
                 <div id="cs-dynamic-fields"></div>
+
+                <!-- Firma del paciente (solo al firmar, no en revocación) -->
+                <div id="cs-firma-paciente-box">
+                    <label class="block text-xs text-gray-500 mb-1">Firma del paciente</label>
+                    <div class="border-2 border-sante-primary/40 rounded-lg bg-gray-50 relative">
+                        <canvas id="cs-canvas-paciente" class="w-full touch-none rounded-lg" style="height:220px"></canvas>
+                        <button type="button" onclick="clearSignature('paciente')" class="absolute top-2 right-2 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-100">Borrar</button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">Firme con el dedo (tablet/móvil) o con el ratón.</p>
+                </div>
 
                 <!-- Campos de revocación (solo si el checkbox está marcado) -->
                 <div id="cs-revoc-fields" class="hidden space-y-3">
@@ -95,7 +105,7 @@
                     <p class="text-xs text-gray-500 font-medium">Tutor/representante (opcional)</p>
                     <div class="mt-2">
                         <label class="block text-xs text-gray-500 mb-1">Nombre tutor</label>
-                        <input type="text" id="cs-tutor" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                        <input type="text" id="cs-tutor" oninput="toggleTutorSignature()" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
                     </div>
                     <div class="mt-2">
                         <label class="block text-xs text-gray-500 mb-1">Relación con el paciente</label>
@@ -104,6 +114,14 @@
                     <div class="mt-2">
                         <label class="block text-xs text-gray-500 mb-1">DNI tutor</label>
                         <input type="text" id="cs-tutor-dni" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                    </div>
+                    <!-- Firma del tutor: solo visible si se indica nombre de tutor -->
+                    <div id="cs-firma-tutor-box" class="mt-3 hidden">
+                        <label class="block text-xs text-gray-500 mb-1">Firma del tutor/representante</label>
+                        <div class="border-2 border-sante-primary/40 rounded-lg bg-gray-50 relative">
+                            <canvas id="cs-canvas-tutor" class="w-full touch-none rounded-lg" style="height:220px"></canvas>
+                            <button type="button" onclick="clearSignature('tutor')" class="absolute top-2 right-2 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-100">Borrar</button>
+                        </div>
                     </div>
                 </div>
 
@@ -314,22 +332,108 @@
         select.innerHTML = templates.map(t => `<option value="${t.filename}">${t.name}</option>`).join('');
     }
 
+    // ---------- Canvas de firma (tablet / móvil / ratón) ----------
+    // Estado por firma: 'paciente' y 'tutor'. Guardamos si tiene trazos (dirty).
+    const signatures = {
+        paciente: { canvas: null, ctx: null, drawing: false, dirty: false, init: false },
+        tutor: { canvas: null, ctx: null, drawing: false, dirty: false, init: false },
+    };
+
+    function setupSignatureCanvas(which) {
+        const s = signatures[which];
+        const canvas = document.getElementById(`cs-canvas-${which}`);
+        if (!canvas) return;
+        s.canvas = canvas;
+        // Ajustar la resolución del canvas al tamaño real que ocupa (nitidez y coordenadas correctas).
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0) return; // aún no visible
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1a1a2e';
+        s.ctx = ctx;
+        s.dirty = false;
+
+        if (s.init) return; // no volver a registrar listeners
+        s.init = true;
+
+        const pos = (e) => {
+            const r = canvas.getBoundingClientRect();
+            return { x: e.clientX - r.left, y: e.clientY - r.top };
+        };
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            s.drawing = true; s.dirty = true;
+            canvas.setPointerCapture(e.pointerId);
+            const p = pos(e);
+            s.ctx.beginPath();
+            s.ctx.moveTo(p.x, p.y);
+        });
+        canvas.addEventListener('pointermove', (e) => {
+            if (!s.drawing) return;
+            e.preventDefault();
+            const p = pos(e);
+            s.ctx.lineTo(p.x, p.y);
+            s.ctx.stroke();
+        });
+        const stop = (e) => { s.drawing = false; };
+        canvas.addEventListener('pointerup', stop);
+        canvas.addEventListener('pointerleave', stop);
+        canvas.addEventListener('pointercancel', stop);
+    }
+
+    function clearSignature(which) {
+        const s = signatures[which];
+        if (s.canvas && s.ctx) {
+            s.ctx.clearRect(0, 0, s.canvas.width, s.canvas.height);
+            s.dirty = false;
+        }
+    }
+
+    // Devuelve el PNG (dataURL) recortado a lo dibujado, o null si está vacía.
+    function getSignaturePng(which) {
+        const s = signatures[which];
+        if (!s.canvas || !s.dirty) return null;
+        return s.canvas.toDataURL('image/png');
+    }
+
+    function toggleTutorSignature() {
+        const nombre = document.getElementById('cs-tutor').value.trim();
+        const box = document.getElementById('cs-firma-tutor-box');
+        if (nombre) {
+            box.classList.remove('hidden');
+            setTimeout(() => setupSignatureCanvas('tutor'), 0);
+        } else {
+            box.classList.add('hidden');
+        }
+    }
+
     function updateConsentFields() {
         const isRevoc = document.getElementById('cs-revocacion').checked;
         const template = document.getElementById('cs-template').value;
         const dynBox = document.getElementById('cs-dynamic-fields');
         const revocBox = document.getElementById('cs-revoc-fields');
         const tutorBox = document.getElementById('cs-tutor-box');
+        const firmaPacienteBox = document.getElementById('cs-firma-paciente-box');
 
         if (isRevoc) {
-            // Revocación: solo campos de revocación, sin campos dinámicos ni tutor.
+            // Revocación: solo campos de revocación, sin campos dinámicos, tutor ni firmas.
             dynBox.innerHTML = '';
             revocBox.classList.remove('hidden');
             tutorBox.classList.add('hidden');
+            firmaPacienteBox.classList.add('hidden');
             return;
         }
         revocBox.classList.add('hidden');
         tutorBox.classList.remove('hidden');
+        firmaPacienteBox.classList.remove('hidden');
+        // Re-preparar el canvas del paciente (por si el modal cambió de tamaño).
+        setTimeout(() => setupSignatureCanvas('paciente'), 0);
         const fields = TEMPLATE_FIELDS[template] || [];
         dynBox.innerHTML = fields.map(f => {
             if (f.type === 'textarea') {
@@ -342,6 +446,7 @@
     async function openConsentModal() {
         document.getElementById('consent-form').reset();
         document.getElementById('cs-revocacion').checked = false;
+        document.getElementById('cs-firma-tutor-box').classList.add('hidden');
         if (!patientData) await loadPatientData();
         const dniBox = document.getElementById('cs-dni-box');
         if (!patientData || !patientData.dni) {
@@ -352,6 +457,8 @@
         await loadConsentTemplates();
         updateConsentFields();
         document.getElementById('consent-modal').classList.remove('hidden');
+        // Preparar el canvas una vez el modal es visible (para medir su tamaño real).
+        setTimeout(() => { clearSignature('paciente'); setupSignatureCanvas('paciente'); }, 30);
     }
     function closeConsentModal() { document.getElementById('consent-modal').classList.add('hidden'); }
 
@@ -372,12 +479,23 @@
             body.nombre_revocante = document.getElementById('cs-revocante').value || null;
             body.observaciones_revoc = document.getElementById('cs-obs-revoc').value || null;
         } else {
-            body.nombre_tutor = document.getElementById('cs-tutor').value || null;
+            const nombreTutor = document.getElementById('cs-tutor').value.trim();
+            body.nombre_tutor = nombreTutor || null;
             body.relacion_tutor = document.getElementById('cs-relacion').value || null;
             body.dni_tutor = document.getElementById('cs-tutor-dni').value || null;
             const fields = TEMPLATE_FIELDS[template] || [];
             const fieldMap = { 'cs-fisio': 'fisio_firma', 'cs-fisio-dni': 'dni_fisio_firma', 'cs-unidad': 'ud_fisioterapia', 'cs-patologia': 'patologia_paciente' };
             fields.forEach(f => { const el = document.getElementById(f.id); if (el) body[fieldMap[f.id] || f.id] = el.value || null; });
+
+            // Firmas manuscritas: la del paciente es obligatoria; la del tutor si hay tutor.
+            const firmaPaciente = getSignaturePng('paciente');
+            if (!firmaPaciente) { showToast('Falta la firma del paciente', 'error'); return; }
+            body.firma_paciente = firmaPaciente;
+            if (nombreTutor) {
+                const firmaTutor = getSignaturePng('tutor');
+                if (!firmaTutor) { showToast('Falta la firma del tutor/representante', 'error'); return; }
+                body.firma_tutor = firmaTutor;
+            }
         }
 
         closeConsentModal();
