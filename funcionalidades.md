@@ -1,134 +1,136 @@
 # Funcionalidades de la aplicación de gestión de clínica
 
+Documento de referencia de todo lo que hace la aplicación. Actualizado al estado actual.
+
 ---
 
 ## Funciones comunes (todos los usuarios)
 
 ### Sesión y autenticación
 
-- La sesión del usuario caduca automáticamente tras 1 hora de inactividad (desde el último inicio de sesión).
-- Si el usuario intenta acceder a cualquier funcionalidad con la sesión caducada, se le deniega el acceso y se le redirige a la pantalla de login.
+- El inicio de sesión pide usuario y contraseña. En la pantalla de login hay un botón (icono de ojo) para mostrar u ocultar la contraseña mientras se escribe.
+- La sesión se mantiene activa mientras se usa la aplicación. El acceso caduca automáticamente tras **30 minutos de inactividad** (sin clics, teclado, scroll ni toques en pantalla).
+- Mientras el usuario trabaja, la sesión se renueva sola de forma transparente; no hace falta volver a iniciar sesión cada cierto tiempo. Las tareas automáticas de fondo (como la comprobación de avisos) no cuentan como actividad, así que 30 minutos parado sí cierran la sesión.
+- Si la sesión caduca, al intentar cualquier acción se redirige automáticamente a la pantalla de login.
 
 ### Pacientes
 
-- Registrar un nuevo paciente rellenando un formulario con sus datos personales.
-- Ver la lista completa de pacientes.
-- Buscar pacientes por nombre, apellidos o teléfono.
+- Registrar un nuevo paciente mediante un formulario con sus datos personales (nombre, apellidos, teléfono, email, dirección, fecha de nacimiento, DNI/NIE, notas).
+- Ver la lista completa de pacientes, con búsqueda por nombre, apellidos o teléfono.
 - Desactivar pacientes (borrado lógico): el paciente deja de aparecer en la lista pero se conservan todos sus datos, historial, citas y facturas. Solo disponible para admin y recepción.
-- Ver pacientes no activos: toggle en la lista de pacientes para mostrar los desactivados. Desde ahí se pueden reactivar.
-- Ver la ficha de un paciente con todos sus datos (nombre, dirección, teléfono, etc.).
-- Registrar alergias y contraindicaciones de forma destacada en la ficha del paciente (por ejemplo: marcapasos, alergias a materiales, etc.).
-- Adjuntar documentos a la ficha del paciente (radiografías, informes médicos externos, fotos de evolución, etc.). Descripción obligatoria. Se pueden ver directamente en el navegador. Accesible desde el menú Acciones > Documentos.
-- Registrar la firma del consentimiento informado directamente desde la ficha del paciente (botón "Firmar" con confirmación y fecha automática).
-- Menú desplegable "Acciones" con acceso a: Historial clínico, Tratamientos, Facturación y Editar.
+- Ver pacientes no activos mediante un toggle en la lista, desde donde se pueden reactivar.
+- La ficha del paciente se divide en dos vistas con un **toggle "Ficha / Historial"** en la parte superior:
+  - **Ficha:** datos del paciente, alergias/contraindicaciones destacadas (si las hay), resumen del bono activo y botón "Editar".
+  - **Historial:** historial clínico de sesiones (ver más abajo).
+- En la cabecera de la ficha hay **botones directos** de acceso a: Tratamientos, Pagos y Documentos (más el botón "Volver").
+- Si el paciente tiene algún pago pendiente, aparece un **icono de aviso rojo junto a su nombre**. El aviso se actualiza en el momento al registrar un pago, sin recargar la página.
+- Adjuntar documentos a la ficha del paciente (radiografías, informes externos, fotos de evolución, etc.), con descripción obligatoria. Se pueden ver directamente en el navegador. Accesible desde el botón "Documentos".
 
 ### Calendario y citas
 
-- Al iniciar sesión, la vista principal de la aplicación es el calendario.
-- Al entrar al calendario tras login, se muestra un modal informando de los avisos sin leer solo si hay uno o más pendientes. Si no hay avisos, no se muestra nada.
-- Ver un calendario con todas las citas programadas.
-- Los slots del calendario son de 1 hora. La pausa de mediodía se muestra como un único bloque compacto en gris con las horas indicadas (ej: "13:30-16:00").
-- Un solo clic en un hueco del calendario abre directamente el modal para crear la cita en esa hora.
-- Botón "Nueva cita" junto al título del calendario para crear citas sin depender de hacer clic en un hueco libre.
-- Filtrar el calendario para ver solo citas en clínica o solo citas a domicilio.
-- Filtrar por estado: checkboxes "Pendientes" y "Confirmadas" (ambos activos por defecto).
-- Las citas pendientes se muestran con opacidad reducida para diferenciarlas visualmente de las confirmadas.
-- Las citas de cada fisioterapeuta se muestran siempre en su color asignado, sin superposición visual (las citas simultáneas se muestran lado a lado).
-- Si el usuario tiene rol PHYSIO, el calendario muestra por defecto solo sus citas.
-- Crear una cita haciendo clic en el calendario, indicando:
-  - Paciente (buscador con autocompletado integrado)
-  - Fisioterapeuta asignado (si el usuario es fisio, se preselecciona a sí mismo)
-  - Duración (30 min, 45 min, 1 hora) — por defecto según configuración
-  - Lugar (clínica o domicilio)
-- Al editar una cita se muestra el estado actual como texto (no editable). Botones: "Confirmar cita" (solo si pendiente), "Finalizar" (solo si confirmada y no finalizada), "Cancelar cita", "Guardar cambios" y "Cerrar".
-- Las citas finalizadas (con sesión clínica registrada), canceladas o con "No asistió" se muestran en solo lectura sin botones de acción.
-- Al editar una cita, se muestra información del bono del paciente (si tiene bono activo y sesiones restantes). Icono de advertencia rojo si el bono tiene pago pendiente, con modal para registrar el pago. Checkbox para marcar si se quiere consumir sesión.
-- Crear citas recurrentes (por ejemplo: "todos los martes y jueves a las 10:00 durante 4 semanas").
-- El calendario impide que se solapen citas del mismo fisioterapeuta.
-- El backend valida que no se puedan crear citas fuera del horario de apertura ni en días festivos. Si se intenta, se muestra el error con opción de "Guardar de todas formas" para excepciones.
-- Si se intenta crear una cita en una fecha y hora anterior a la actual, se muestra un modal informando con tres opciones: guardar de todas formas, editar fecha o cancelar.
-- Los días de la semana que están siempre cerrados (ej: sábado y domingo) no aparecen en el calendario.
-- Las horas fuera del horario de apertura no se muestran en el calendario (solo se ven las horas útiles).
-- La pausa de mediodía (jornada partida) se muestra como un único bloque compacto en gris y no se puede seleccionar.
-- Los días festivos aparecen en gris y no permiten asignar citas.
-- Cada fisioterapeuta tiene un color asignado (configurable desde gestión de usuarios); las citas se muestran en el color de su fisio para diferenciarlas visualmente.
-- Cada cita tiene un estado: pendiente, confirmada, cancelada o finalizada.
-- Al finalizar una cita, su estado cambia a "Finalizada" y queda en solo lectura.
-- Añadir notas a una cita (por ejemplo: "avisar un día antes por teléfono").
-- Envío automático de recordatorio de cita al paciente 24 horas antes por email.
-- Los emails enviados desde la app muestran el nombre de la clínica como remitente (configurado en CLINIC_NAME del .env).
+- Al iniciar sesión, la vista principal es el calendario.
+- Al entrar tras el login se muestra un modal con los avisos sin leer, solo si hay alguno pendiente.
+- Vistas de mes, semana y día. En pantallas pequeñas (móvil) la cabecera del calendario se adapta automáticamente.
+- Los días de la semana siempre cerrados y las horas fuera del horario de apertura no se muestran. La pausa de mediodía (jornada partida) aparece como un bloque compacto en gris y no se puede seleccionar. Los días festivos aparecen en gris y no permiten citas.
+- Cada fisioterapeuta tiene un color asignado; sus citas se muestran en ese color. Las citas simultáneas de distintos fisios se muestran lado a lado, sin superposición.
+- Las citas **pendientes** se muestran con opacidad reducida. Las citas **finalizadas** se distinguen con un patrón de rayas diagonales y un "✓" delante del nombre del paciente.
+- Botón "Nueva cita" junto al título, y también se puede crear haciendo clic en el calendario:
+  - En vista de semana o día, el clic en una franja horaria abre el modal en esa hora.
+  - En vista de mes, el clic en un día abre el modal con la hora de apertura de ese día.
+- Filtros del calendario: por ubicación (clínica/domicilio) y por estado (pendientes/confirmadas). Si el usuario es fisioterapeuta, por defecto ve solo sus citas.
 
-### Lista de espera
+#### Crear y editar una cita
 
-- Accesible desde un botón en la vista del calendario (se abre como modal).
-- Añadir un paciente a la lista de espera indicando:
-  - Paciente (buscador con autocompletado)
-  - Fisioterapeutas preferidos (selección múltiple, o ninguno = cualquiera)
-  - Preferencia horaria: cualquier hora, solo mañanas, solo tardes, o franja concreta (hora desde - hora hasta)
-  - Fecha: "Lo antes posible", un día concreto, o un rango de fechas
-  - Prioridad: marcar como prioritario (se muestra antes en la lista)
-  - Notas libres
-- La lista se ordena por: fecha deseada más cercana → prioritarios primero → antigüedad de solicitud.
-- Se registra la fecha y hora exacta en que se añadió a la lista.
-- Los pacientes prioritarios se destacan visualmente con borde rojo.
-- Al cancelar una cita, el sistema comprueba automáticamente si hay pacientes en lista de espera que encajen con el hueco liberado (fecha, hora, fisio). Si los hay, se muestra un aviso con opción de ver la lista de espera.
-- Al crear una cita para un paciente que está en lista de espera, se ofrece eliminarlo automáticamente de la lista.
+El modal de cita funciona así:
 
-### Avisos internos
+- **Paciente:** buscador con autocompletado.
+- **Fisioterapeuta:** si el usuario es fisio, se preselecciona a sí mismo.
+- **Día:** selector de fecha.
+- **Hora:** al elegir día y fisioterapeuta, aparece un desplegable con **las horas disponibles** de ese fisio para ese día. Las horas se calculan automáticamente a partir del horario del fisio (mañana y tarde, respetando la pausa del mediodía) en intervalos según la **duración configurada**. Las horas ya ocupadas aparecen deshabilitadas y marcadas como "(ocupada)". Si se cambia el fisioterapeuta, el desplegable se recalcula con su agenda.
+- **La duración ya no se elige**: se aplica automáticamente la duración predeterminada configurada.
+- **Lugar:** clínica o domicilio.
+- **Notas** de la cita.
+- El modal se cierra con la **"X"** de la esquina superior derecha o haciendo clic fuera del modal.
+- El calendario impide solapar citas del mismo fisioterapeuta. El backend valida además que no se creen citas fuera del horario de apertura ni en festivos (con opción de "Guardar de todas formas" para excepciones). Si la fecha/hora es anterior a la actual, se pide confirmación.
+- Al editar una cita se muestra su estado actual como texto. Los botones disponibles dependen del estado:
+  - **Confirmar cita** (solo si está pendiente).
+  - **Finalizar** (solo si está confirmada y aún no tiene sesión registrada).
+  - **Cancelar cita**.
+  - **Guardar cambios**.
+  - **Enviar recordatorio** por WhatsApp.
+- Si la cita está **finalizada**, queda en solo lectura: el nombre del paciente pasa a ser un enlace a su ficha, y solo se muestran las acciones de justificante de asistencia (ver más abajo). No se muestran "Enviar recordatorio" ni "Cancelar cita".
+- Crear **citas recurrentes** (ej.: "todos los martes y jueves durante 4 semanas"). Las que solaparían con citas existentes se omiten.
+- Si se cancela una cita, su hueco vuelve a quedar disponible y seleccionable.
+- Envío automático de recordatorio de cita al paciente 24 horas antes por email. Los emails muestran el nombre de la clínica como remitente.
 
-- Dejar avisos entre compañeros dentro de la aplicación (por ejemplo: recepción avisa al fisio de que un paciente llega 15 minutos tarde).
-- Los avisos se reciben en tiempo real mediante WebSocket (sin necesidad de refrescar la página).
-- Al recibir un aviso suena una notificación sonora y aparece un toast en pantalla.
-- Los avisos no leídos se distinguen visualmente con borde grueso y texto en negrita.
-- Se pueden eliminar avisos individualmente (con confirmación mediante modal).
-- Se pueden marcar como leídos individualmente o todos a la vez.
+#### Finalizar una cita
 
-### Facturación y pagos
+Al finalizar una cita se abre un modal con:
 
-- Registrar el pago de un paciente indicando el método (efectivo o bizum).
-- Crear documentos de cobro eligiendo el tipo: factura, factura simplificada (recibo) o justificante. Por defecto justificante. Se asocia obligatoriamente a una cita o a un bono del paciente (las dos cosas que se cobran en la clínica).
-- Editar documentos de cobro: botón de edición (lápiz) en la tabla. Modal con campos tipo documento, importe, método de pago y cita/bono asociado. Al guardar se regenera el PDF automáticamente.
-- Al crear un documento de cobro se genera automáticamente el PDF y se guarda en el servidor.
-- Botón "Ver PDF" para abrir el documento generado en una nueva pestaña.
-- Botón "Enviar" para enviar el PDF por email al paciente. Si el paciente no tiene email configurado, se muestra un modal para introducirlo, guardarlo y enviar.
-- En el selector de citas solo aparecen las que no tienen ya un documento de cobro asociado.
-- En el selector de bonos se indica si están caducados.
-- Si se selecciona un método de pago (efectivo o bizum) se marca como pagado automáticamente. Si se deja "Pendiente de pago" se marca como no pagado.
-- Todo cobro pagado se registra automáticamente como ingreso en la contabilidad. Si se edita el importe o se desmarca como pagado, el ingreso se actualiza o elimina correspondientemente.
-- Ver pacientes con pagos pendientes.
-- Filtro de pagos pendientes en la lista de pacientes.
+- **Seguimiento** (observaciones de la sesión, opcional). Esto genera la sesión clínica en el historial.
+- **Tipo de documento** (justificante, factura o factura simplificada).
+- **Importe** (obligatorio; se precarga con el precio de sesión configurado y se puede modificar).
+- **Método de pago:** pendiente de pago, efectivo, bizum o **bono**.
+- Si el paciente tiene un bono activo con sesiones disponibles, aparece la opción "Consumir sesión del bono". Al marcarla, el método pasa automáticamente a "Bono" y el importe en euros pasa a 0; al desmarcarla vuelve a "Pendiente" y reaparece el importe. La sincronización funciona en ambos sentidos (marcar el bono en el desplegable marca el check y viceversa).
+
+**Regla importante:** el documento de cobro **solo se genera si hay pago** (efectivo, bizum o bono). Si la cita se deja **pendiente de pago**, no se crea ningún documento; el importe queda guardado en la cita y el documento se generará más adelante al registrar el pago desde la vista de Pagos.
+
+- El importe de la sesión queda guardado en la propia cita, aunque el pago quede pendiente.
+- El pago con bono consume una sesión del bono. Un paciente con bono al que no se le marca el consumo se cobra como un paciente normal.
+
+### Facturación y pagos (vista "Pagos" del paciente)
+
+- La vista tiene un **toggle "Cita / Bono"** para elegir qué se está cobrando.
+- Si no hay citas (o bonos) pendientes de pago, se muestra un mensaje indicándolo y no aparece el formulario.
+- Cuando hay pendientes, el formulario tiene, en este orden:
+  1. **Desplegable** con las citas (o bonos) pendientes de pago.
+  2. **Importe**, con el símbolo €, autorrellenado según la cita/bono elegido (editable).
+  3. **Método de pago** (efectivo o bizum; aquí no existe la opción "pendiente", porque registrar el pago implica que se ha cobrado).
+  4. **Tipo de documento** (justificante, factura o factura simplificada).
+  5. Botón **Registrar**.
+- El pago con sesión de bono solo se hace al finalizar la cita. Si una cita se dejó pendiente, desde aquí solo se puede cobrar con dinero.
+- Al registrar el pago se genera el documento PDF, se guarda y se registra el ingreso en contabilidad.
+- **Historial de documentos:** tabla con fecha de cobro, tipo, cita/bono asociado, importe, método, estado (pagado/pendiente) y acciones. La fila completa es clicable para **ver el PDF**. Acciones por fila: editar, registrar pago (si está pendiente), enviar por email y eliminar.
+- **Editar un documento:** se puede cambiar el tipo, importe, método de pago y la cita/bono asociado. Si se cambia el tipo de documento (por ejemplo de justificante a factura), el documento se regenera desde cero: se borra el PDF anterior, se renumera con el prefijo correspondiente y se genera el nuevo PDF.
+- **Eliminar un documento:** se borra por completo (el PDF, el registro y el ingreso asociado en contabilidad). La cita o bono asociado queda libre de nuevo, como si nunca se hubiera cobrado.
+- **Enviar por email:** envía el PDF al paciente. Si no tiene email registrado, se pide introducirlo.
+- Numeración de documentos por año y tipo: Justificante `J-AAAA-NNNN`, Factura `F-AAAA-NNNN`, Factura simplificada `FS-AAAA-NNNN`.
+- Métodos de pago disponibles: efectivo y bizum.
+- Filtro de pagos pendientes en la lista de pacientes, y aviso de pagos pendientes en la ficha.
 
 ### Bonos de sesiones
 
-- Gestionar bonos de sesiones desde la vista de bonos del paciente (`/patients/{id}/packs`), accesible desde la ficha del paciente.
-- En la ficha del paciente se muestra un resumen del bono activo (sesiones consumidas/total, caducidad) como tabla clicable. Icono de advertencia rojo si tiene pago pendiente con modal para registrar pago. Botón "Crear bono" si no tiene bono activo.
-- Crear bonos indicando número de sesiones, precio, caducidad, tipo de documento y método de pago (obligatoria).
-- Editar bonos existentes (sesiones, precio, caducidad).
-- Cancelar bonos: no se eliminan, se marcan como cancelados.
-  - **Si el bono estaba pagado:** se elimina automáticamente su documento de cobro y se revierte el ingreso en contabilidad (devolución). Esto cubre el caso de que el paciente quiera recuperar su dinero o que se haya registrado erróneamente.
-  - **Si el bono estaba pendiente de pago:** no se hace nada con la factura, simplemente se cancela el bono.
-  - **IMPORTANTE:** Un bono NO se cancela porque el paciente deje de venir. En ese caso se deja sin tocar y cuando llegue su fecha de caducidad pasará automáticamente a estado "Caducado".
-- Ver estado de bonos: activo (sesiones restantes), agotado, caducado o cancelado.
-- Comprobación automática diaria (23:00): el sistema revisa si hay bonos cuya fecha de caducidad ha pasado y los marca como caducados.
-- El consumo de sesiones se realiza al finalizar una cita desde el calendario.
-- Al crear un bono se abre automáticamente el modal de facturación para registrar el cobro.
+- Gestión de bonos desde la vista de bonos del paciente y desde el resumen de la ficha.
+- En la ficha se muestra el bono activo (sesiones consumidas/total y caducidad). Si no tiene, aparece un botón "Crear bono".
+- **Crear bono:** por defecto **10 sesiones** y **caducidad a 6 meses** (ambos editables), más precio, tipo de documento y método de pago.
+- Al igual que las citas, el documento de cobro del bono **solo se crea si hay pago**. Si se deja pendiente, no se genera documento (se hará al registrar el pago del bono).
+- Editar bonos (sesiones, precio, caducidad). Si se cambia el precio de un bono ya pagado, se regenera su documento y se ajusta el ingreso.
+- **Cancelar bono:** no se elimina, se marca como cancelado.
+  - Si estaba pagado, se elimina su documento de cobro y se revierte el ingreso (devolución).
+  - Si estaba pendiente, simplemente se cancela.
+  - Un bono NO se cancela porque el paciente deje de venir: en ese caso se deja y pasará a "Caducado" al llegar su fecha.
+- Estados del bono: activo (con sesiones restantes), agotado, caducado o cancelado.
+- El consumo de sesiones se realiza al finalizar una cita marcando "Consumir sesión del bono".
 
 ### Tratamientos y documentos
 
-- Crear un tratamiento con ejercicios o recomendaciones para que el paciente haga en casa.
-- Generar el consentimiento informado en PDF.
-- Enviar documentos por email al paciente (facturas, justificantes, ejercicios, recomendaciones, consentimientos, etc.).
+- Crear tratamientos con ejercicios o recomendaciones para el paciente, y generarlos en PDF.
+- Enviar documentos por email al paciente (facturas, justificantes, ejercicios, consentimientos, etc.).
+- **Todos los PDF generados por la aplicación** (facturas, justificantes, tratamientos, justificante de asistencia) llevan el logo de la clínica como marca de agua tenue de fondo.
 
 ### Consentimientos informados
 
-- Sección "Consentimientos" en la ficha del paciente con botón "+ Firmar".
-- Un paciente puede firmar múltiples consentimientos (fisioterapia general, punción seca, suelo pélvico, etc.).
-- Las plantillas son archivos `.docx` con marcadores `{{campo}}` ubicados en `app/static/docs/`.
-- Al firmar se abre un modal con los campos que no se pueden rellenar automáticamente: fisioterapeuta, DNI fisio, unidad de fisioterapia, tutor/representante y observaciones.
+- Un paciente puede firmar múltiples consentimientos (fisioterapia general, punción seca, suelo pélvico, información de tratamiento de datos, etc.).
+- Al firmar se abre un modal con los datos que no se rellenan solos. En el consentimiento de fisioterapia general, los campos de fisioterapeuta, DNI del fisio y unidad de fisioterapia son **opcionales**: si se dejan vacíos, el documento sale con líneas para rellenar a mano.
 - Los datos del paciente (nombre, DNI) y la fecha se rellenan automáticamente.
-- Se genera un PDF firmado que se guarda en el directorio de documentos firmados.
-- Cada consentimiento firmado se puede ver (PDF) o enviar por email al paciente.
-- Lista de todos los consentimientos firmados del paciente con fecha y tipo de documento.
+- La firma se dibuja en pantalla (con el dedo en tablet/móvil o con el ratón). La firma del paciente es obligatoria; la del tutor/representante solo si se indican sus datos.
+- Se genera un PDF firmado que se guarda en los documentos del paciente. Cada consentimiento firmado se puede ver o enviar por email. También existe la opción de documento de revocación.
+
+### Justificantes de asistencia
+
+- Desde una cita **finalizada** (en el calendario) y desde el historial clínico se puede **ver** o **enviar por email** un justificante de asistencia en PDF.
+- El justificante recoge los datos de la cita: paciente, fecha, hora y duración.
+- El justificante lo firma el fisioterapeuta que atendió la cita: si ese fisio tiene una firma registrada, se estampa automáticamente en el documento.
 
 ---
 
@@ -136,59 +138,72 @@
 
 ### Configuración de la clínica
 
-- Configurar el horario de apertura para cada día de la semana (horario normal).
-- Soporte para jornada partida: mañana y tarde con pausa intermedia.
-- Las horas de pausa (cierre entre mañana y tarde) aparecen en gris en el calendario y no se pueden seleccionar.
-- Crear horarios especiales para periodos concretos (ej: verano, Navidad, semanas específicas) que sobreescriben el horario normal durante esas fechas.
-- Configurar días festivos: el día completo aparece en gris en el calendario y no se pueden asignar citas.
-- El calendario solo muestra las horas comprendidas entre la apertura más temprana y el cierre más tardío configurados.
-- Configurar la duración predeterminada de una cita (30, 45 o 60 minutos), que se aplica por defecto al crear una nueva cita.
-- Configurar precio por defecto de sesión y precio por defecto de bono. Estos precios se precargan en los formularios de cobro pero se pueden modificar en cada caso.
-- Configurar el horario personal de cada fisioterapeuta (entrada, salida, días libres). Si se intenta crear una cita fuera de su horario, se muestra un aviso pero se permite guardar si el usuario confirma.
-- Cada fisioterapeuta tiene un color asignado (configurable con selector de color desde gestión de usuarios) que se usa en el calendario para diferenciar visualmente sus citas.
+- Configurar el horario de apertura para cada día de la semana, con soporte de jornada partida (mañana y tarde con pausa).
+- Crear horarios especiales para periodos concretos (verano, Navidad, etc.) que sobreescriben el horario normal durante esas fechas.
+- Configurar días festivos.
+- Configurar el **horario personal de cada fisioterapeuta** (mañana, tarde y días libres). Es lo que determina las horas disponibles al crear una cita para ese fisio.
+- Registrar **ausencias y vacaciones** de los fisioterapeutas (rango de fechas, opcionalmente franja horaria).
+- Configurar la **duración predeterminada de una cita**, introduciéndola como número de minutos (campo numérico libre).
+- Configurar el precio por defecto de sesión y de bono (se precargan en los formularios de cobro, modificables en cada caso).
+- Configurar el mensaje del recordatorio de WhatsApp.
+- Asignar un color a cada fisioterapeuta (usado en el calendario).
+- Importar pacientes desde Excel y exportar la facturación para la gestoría en Excel.
 
 ### Contabilidad
 
-- Acceso protegido con contraseña (se pide la contraseña del usuario autenticado al entrar).
-- Registrar, editar o eliminar ingresos.
-- Registrar, editar o eliminar gastos.
-- Ver el balance económico de un periodo de tiempo (mensual, bimensual, trimestral, anual o personalizado).
+- Acceso protegido con la contraseña del usuario autenticado.
+- Registrar, editar o eliminar ingresos y gastos.
+- Ver el balance económico de un periodo (mensual, trimestral, anual o personalizado).
+- Los cobros a pacientes se registran automáticamente como ingresos. Al eliminar o modificar un documento de cobro, el ingreso se actualiza o elimina en consecuencia.
 
 ### Gestión de usuarios
 
-- Dar de alta un nuevo usuario (recepción o fisioterapeuta).
-- Al seleccionar el rol "Fisioterapeuta", el checkbox "Puede atender pacientes" se marca automáticamente.
-- Editar los datos de un usuario.
-- Desactivar un usuario (sin eliminarlo, para mantener el historial).
+- Dar de alta usuarios (recepción o fisioterapeuta). Al elegir el rol "Fisioterapeuta" se marca automáticamente "Puede atender pacientes".
+- Editar los datos de un usuario y su color de calendario.
+- **Registrar la firma del fisioterapeuta** dibujándola en pantalla (mismo componente que los consentimientos). Esa firma se estampa en los justificantes de asistencia de sus citas.
+- Desactivar/reactivar un usuario (sin eliminarlo, para mantener el historial). No es posible desactivarse a uno mismo.
 
 ### Copia de seguridad
 
-- Exportar la base de datos completa como archivo .db (descarga directa). Protegido con contraseña del usuario admin.
-- Importar una copia de seguridad subiendo un archivo .db. Se eliminan todos los datos actuales y se reemplazan por los del archivo importado. Protegido con contraseña.
-- Antes de restaurar se guarda automáticamente una copia del estado actual.
-- Accesible desde Configuración > Backup (solo admin).
+- Exportar la base de datos completa como archivo `.db` (protegido con contraseña del admin).
+- Importar una copia de seguridad; antes de restaurar se guarda automáticamente una copia del estado actual.
+- Accesible desde Configuración (solo admin).
 
-### Registro de actividad
+### Registro de actividad (auditoría)
 
-- Ver un registro de quién ha hecho qué y cuándo dentro de la aplicación (por seguridad y protección de datos).
+- Registro de quién ha hecho qué y cuándo (crear, editar, eliminar, cancelar, etc.), con filtros por usuario, acción, entidad y fechas.
 
 ---
 
 ## Funciones para usuarios con permiso de fisioterapeuta (is_physio)
 
-Cualquier usuario con el atributo `is_physio` activado puede acceder a estas funciones, independientemente de su rol administrativo (ADMIN, RECEPTION o PHYSIO).
+Cualquier usuario con el atributo `is_physio` activado puede acceder a estas funciones, independientemente de su rol (ADMIN, RECEPTION o PHYSIO).
 
 ### Historial clínico
 
-- Ver el historial completo de sesiones de un paciente en formato tabla (fecha, observaciones, estado de pago). Accesible para todos los roles desde la ficha del paciente.
-- La fecha y las observaciones son enlaces clicables que abren el detalle completo de la sesión.
-- Las sesiones con pago pendiente muestran un enlace "Pendiente" que abre un modal para registrar el cobro (Efectivo o Bizum).
-- Las sesiones se registran exclusivamente al finalizar una cita desde el calendario. La fecha y hora de la sesión es la de la cita, no la del momento de finalización. Cualquier rol puede finalizar citas.
-- Generar justificante de asistencia en PDF desde el historial clínico (botón en cada sesión). Incluye fecha, hora y duración de la cita.
-- Enviar justificante de asistencia por email al paciente directamente desde el historial clínico.
-- Al finalizar una cita se abre un modal con: observaciones (opcional) y datos de pago (tipo documento, importe, método). Esto genera la sesión clínica y el documento de cobro.
-- Botón ver: abre modal con todos los datos de la sesión.
-- Botón editar: permite modificar solo las observaciones.
+- Ver el historial de sesiones del paciente en tabla (fecha, seguimiento, estado de pago), dentro de la pestaña "Historial" de la ficha.
+- Ordenar por fecha ascendente o descendente (por defecto, las más recientes primero) y buscar por fecha u observaciones.
+- Cada fila abre el detalle de la sesión. Las sesiones con pago pendiente muestran un enlace "Pendiente" para registrar el cobro. El pago con bono se muestra como tal.
+- Las sesiones se registran exclusivamente al finalizar una cita desde el calendario. La fecha de la sesión es la de la cita. Cualquier rol puede finalizar citas.
+- Desde cada sesión se puede editar el seguimiento, y generar o enviar por email el justificante de asistencia.
+
+---
+
+## Avisos internos
+
+- Dejar avisos entre compañeros dentro de la aplicación (por ejemplo, recepción avisa al fisio de que un paciente llega tarde).
+- Los avisos se reciben en tiempo real (sin refrescar la página), con sonido y aviso en pantalla.
+- Los no leídos se distinguen visualmente. Se pueden marcar como leídos (individualmente o todos) y eliminar.
+
+---
+
+## Lista de espera
+
+- Accesible desde un botón en el calendario.
+- Añadir un paciente indicando: fisioterapeutas preferidos (o cualquiera), preferencia horaria (cualquier hora, mañanas, tardes o franja concreta), fecha (lo antes posible, un día concreto o un rango), prioridad y notas.
+- La lista se ordena por fecha deseada, prioridad y antigüedad de la solicitud. Los prioritarios se destacan.
+- Al cancelar una cita, el sistema comprueba si hay pacientes en lista de espera que encajen con el hueco liberado.
+- Al crear una cita para un paciente que está en lista de espera, se ofrece quitarlo de la lista.
 
 ---
 
@@ -197,7 +212,7 @@ Cualquier usuario con el atributo `is_physio` activado puede acceder a estas fun
 | Usuario | Descripción |
 |---------|-------------|
 | Administración | Acceso completo a todas las funciones. |
-| Recepción | Funciones comunes (gestión de citas, pacientes, facturación). |
-| Fisioterapeuta | Funciones comunes + historial clínico e informes. |
+| Recepción | Funciones comunes (citas, pacientes, facturación). |
+| Fisioterapeuta | Funciones comunes + historial clínico y sesiones. |
 
-**Nota:** El acceso a funciones de fisioterapia (historial clínico, sesiones, informes) se controla mediante el atributo `is_physio`, independiente del rol. Un usuario con rol Administración o Recepción también puede tener acceso a estas funciones si tiene `is_physio` activado.
+**Nota:** el acceso a las funciones de fisioterapia se controla con el atributo `is_physio`, independiente del rol. Un usuario de Administración o Recepción también puede tenerlas si tiene `is_physio` activado.
