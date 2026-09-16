@@ -248,9 +248,11 @@ def fill_consent_template(template_filename: str, data: dict, output_dir: str) -
         "mes_firma": MESES[now.month],
         "ano_firma": str(now.year),
         # --- Campos específicos CI FISIOTERAPIA GENERAL ---
-        "fisio_firma": data.get("fisio_firma", ""),
-        "dni_fisio_firma": data.get("dni_fisio_firma", ""),
-        "ud_fisioterapia": data.get("ud_fisioterapia", ""),
+        # Opcionales: si vienen vacíos se rellenan con guiones bajos, igual que
+        # los campos del tutor cuando no hay representante.
+        "fisio_firma": data.get("fisio_firma") or BLANK_NAME,
+        "dni_fisio_firma": data.get("dni_fisio_firma") or BLANK_DNI,
+        "ud_fisioterapia": data.get("ud_fisioterapia") or BLANK_TEXT,
         # --- Campo específico CI PUNCION SECA ---
         "patología_paciente": data.get("patología_paciente", ""),
         # --- Autorización tutor/representante ---

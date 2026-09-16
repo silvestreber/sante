@@ -53,6 +53,7 @@ class User(Base):
     is_physio = Column(Boolean, default=False)
     is_colaborador = Column(Boolean, default=False)
     color = Column(String, nullable=True)  # Color hex para calendario
+    signature = Column(Text, nullable=True)  # Firma del fisio (dataURL PNG) para justificantes
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -110,6 +111,11 @@ class Appointment(Base):
     notes = Column(Text, nullable=True)
     recurrence_group = Column(String, nullable=True)
     reminder_sent = Column(Boolean, default=False)
+    # Importe de la sesión (euros), fijado al finalizar la cita. 0 cuando se paga con bono.
+    amount = Column(Float, nullable=True)
+    # Datos de pago con bono (independientes del importe en euros).
+    paid_with_pack = Column(Boolean, default=False)
+    pack_sessions_consumed = Column(Integer, nullable=True)  # nº de sesiones de bono consumidas
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

@@ -17,7 +17,9 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "clave-secreta-cambiar-en-produccion")
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_HOURS = 1
+# Sesión deslizante: el token vive 30 minutos y se refresca con la actividad.
+# El usuario solo es expulsado tras 30 minutos de inactividad.
+TOKEN_EXPIRE_MINUTES = 30
 
 security = HTTPBearer()
 
@@ -31,7 +33,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_token(user_id: int, username: str, role: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     payload = {"sub": str(user_id), "username": username, "role": role, "exp": expire}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 

@@ -32,7 +32,7 @@
 
 <!-- Modal crear bono -->
 <div id="create-pack-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Crear bono</h2>
         <form id="create-pack-form" class="space-y-3">
             <div>
@@ -73,7 +73,7 @@
 
 <!-- Modal registrar pago bono -->
 <div id="pack-pay-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
         <form id="pack-pay-form" class="space-y-3">
             <input type="hidden" id="pp-invoice-id">
@@ -94,7 +94,7 @@
 
 <!-- Modal editar bono -->
 <div id="edit-pack-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Editar bono</h2>
         <form id="edit-pack-form" class="space-y-3">
             <input type="hidden" id="ep-id">
@@ -174,6 +174,12 @@
         authFetch('/api/config/settings').then(r => r.json()).then(s => {
             if (s.default_pack_price) document.getElementById('cp-amount').value = s.default_pack_price;
         });
+        // Nº de sesiones por defecto: 10.
+        document.getElementById('cp-sessions').value = 10;
+        // Caducidad por defecto: hoy + 6 meses.
+        const d = new Date();
+        d.setMonth(d.getMonth() + 6);
+        document.getElementById('cp-expires').value = d.toISOString().slice(0, 10);
         document.getElementById('create-pack-modal').classList.remove('hidden');
     }
 
@@ -196,19 +202,24 @@
             return;
         }
         const packData = await packRes.json();
-        const invoiceBody = {
-            patient_id: parseInt(patientId),
-            session_pack_id: packData.id,
-            doc_type: document.getElementById('cp-doc-type').value,
-            amount: parseFloat(document.getElementById('cp-amount').value),
-            payment_method: document.getElementById('cp-payment').value || null,
-            is_paid: !!document.getElementById('cp-payment').value,
-        };
-        await authFetch('/api/billing/invoices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(invoiceBody),
-        });
+        // El documento de cobro solo se crea si hay pago. Si queda pendiente, no se
+        // genera documento; se creará al registrar el pago del bono más adelante.
+        const packPayment = document.getElementById('cp-payment').value;
+        if (packPayment) {
+            const invoiceBody = {
+                patient_id: parseInt(patientId),
+                session_pack_id: packData.id,
+                doc_type: document.getElementById('cp-doc-type').value,
+                amount: parseFloat(document.getElementById('cp-amount').value),
+                payment_method: packPayment,
+                is_paid: true,
+            };
+            await authFetch('/api/billing/invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(invoiceBody),
+            });
+        }
         document.getElementById('create-pack-modal').classList.add('hidden');
         showToast('Bono creado');
         loadPacks();

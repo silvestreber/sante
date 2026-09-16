@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import create_token, verify_password
+from app.auth import create_token, get_current_user, verify_password
 from app.db.database import get_db
 from app.db.models import User
 
@@ -32,6 +32,22 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales incorrectas")
     token = create_token(user.id, user.username, user.role.value)
     return LoginResponse(token=token, role=user.role.value, full_name=user.full_name, is_physio=user.is_physio, user_id=user.id)
+
+
+class RefreshResponse(BaseModel):
+    token: str
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+def refresh_token(current_user: User = Depends(get_current_user)):
+    """Renueva el token del usuario autenticado, reiniciando la ventana de expiración.
+
+    Solo funciona con un token todavía válido (no expirado). El frontend lo llama
+    periódicamente mientras haya actividad, implementando una sesión deslizante:
+    la sesión se mantiene viva mientras se usa y solo caduca tras 30 minutos de inactividad.
+    """
+    token = create_token(current_user.id, current_user.username, current_user.role.value)
+    return RefreshResponse(token=token)
 
 
 class VerifyPasswordRequest(BaseModel):

@@ -42,6 +42,9 @@ class AppointmentUpdate(BaseModel):
     status: str | None = None
     notes: str | None = None
     physio_id: int | None = None
+    amount: float | None = None
+    paid_with_pack: bool | None = None
+    pack_sessions_consumed: int | None = None
 
 
 class RecurrenceCreate(BaseModel):
@@ -138,6 +141,9 @@ def appointment_to_dict(apt: Appointment, db: Session = None):
         "recurrence_group": apt.recurrence_group,
         "created_by": apt.created_by,
         "has_session": has_session,
+        "amount": apt.amount,
+        "paid_with_pack": apt.paid_with_pack,
+        "pack_sessions_consumed": apt.pack_sessions_consumed,
     }
 
 
@@ -241,6 +247,12 @@ def update_appointment(
         apt.status = AppointmentStatus(data.status)
     if data.notes is not None:
         apt.notes = data.notes
+    if data.amount is not None:
+        apt.amount = data.amount
+    if data.paid_with_pack is not None:
+        apt.paid_with_pack = data.paid_with_pack
+    if data.pack_sessions_consumed is not None:
+        apt.pack_sessions_consumed = data.pack_sessions_consumed
 
     db.commit()
     log_action(db, current_user.id, "EDITAR", "CITA", apt.id)

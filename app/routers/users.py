@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
     is_physio: bool = False
     is_colaborador: bool = False
     color: str | None = None
+    signature: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -29,6 +30,7 @@ class UserUpdate(BaseModel):
     is_physio: bool | None = None
     is_colaborador: bool | None = None
     color: str | None = None
+    signature: str | None = None
 
 
 @router.get("")
@@ -44,6 +46,7 @@ def list_users(db: Session = Depends(get_db), current_user: User = Depends(admin
             "is_colaborador": u.is_colaborador,
             "is_active": u.is_active,
             "color": u.color,
+            "has_signature": bool(u.signature),
         }
         for u in users
     ]
@@ -61,6 +64,7 @@ def create_user(data: UserCreate, db: Session = Depends(get_db), current_user: U
         is_physio=data.is_physio,
         is_colaborador=data.is_colaborador,
         color=data.color,
+        signature=data.signature,
     )
     db.add(user)
     db.commit()
@@ -84,6 +88,9 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), c
         user.is_colaborador = data.is_colaborador
     if data.color is not None:
         user.color = data.color if data.color else None
+    if data.signature is not None:
+        # Cadena vacía = borrar la firma; dataURL = actualizar.
+        user.signature = data.signature or None
     if data.password:
         user.password_hash = hash_password(data.password)
     db.commit()

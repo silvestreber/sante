@@ -250,7 +250,14 @@ def update_invoice(
 
     was_paid = invoice.is_paid
 
-    if data.doc_type is not None:
+    if data.doc_type is not None and data.doc_type != invoice.doc_type:
+        # Cambia el tipo de documento: se regenera desde cero. Borramos el PDF físico
+        # anterior y renumeramos con el prefijo del nuevo tipo (J/F/FS).
+        _delete_invoice_pdf(db, invoice)
+        invoice.pdf_filename = None
+        invoice.doc_type = data.doc_type
+        invoice.invoice_number = _next_invoice_number(db, data.doc_type)
+    elif data.doc_type is not None:
         invoice.doc_type = data.doc_type
     if data.amount is not None:
         invoice.amount = data.amount
@@ -334,48 +341,18 @@ def delete_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    # Eliminar ingreso asociado si estaba pagado
-    if invoice.is_paid:
-        _remove_income(db, invoice.id)
+    # Borrar el rastro del pago en contabilidad/balance. Se hace SIEMPRE (no solo si
+    # is_paid): _remove_income borra por invoice_id, así no queda ningún ingreso huérfano.
+    _remove_income(db, invoice.id)
 
-    # Si está asociado a una cita o bono, marcar como no pagado (queda pendiente)
-    if invoice.appointment_id or invoice.session_pack_id:
-        _ensure_storage_available(db)  # el USB debe estar montado antes de regenerar el PDF
-        invoice.is_paid = False
-        invoice.payment_method = None
-        db.commit()
-
-        # Regenerar PDF con estado pendiente
-        patient = db.query(Patient).filter(Patient.id == invoice.patient_id).first()
-        description = ""
-        if invoice.appointment:
-            description = f"Cita {invoice.appointment.start_time.strftime('%d-%m-%Y %H:%M')}"
-        elif invoice.session_pack:
-            description = f"Bono {invoice.session_pack.total_sessions} sesiones"
-        pdf_data = {
-            "invoice_number": invoice.invoice_number,
-            "doc_type": invoice.doc_type.value,
-            "amount": invoice.amount,
-            "description": description,
-            "payment_method": None,
-            "is_paid": False,
-            "date": invoice.created_at.strftime("%d-%m-%Y") if invoice.created_at else None,
-            "patient_name": f"{patient.first_name} {patient.last_name}",
-            "patient_dni": patient.dni or "",
-        }
-        _save_invoice_pdf(db, invoice, pdf_data)
-        db.commit()
-
-        log_action(db, current_user.id, "REVERTIR_PAGO", "FACTURA", invoice_id, invoice.invoice_number)
-        return {"message": "Pago revertido, documento marcado como pendiente"}
-    else:
-        # Sin asociación: eliminar completamente
-        _delete_invoice_pdf(db, invoice)
-        invoice_number = invoice.invoice_number
-        db.delete(invoice)
-        db.commit()
-        log_action(db, current_user.id, "ELIMINAR", "FACTURA", invoice_id, invoice_number)
-        return {"message": "Documento eliminado"}
+    # Eliminar por completo el documento: PDF + registro. La cita/bono asociado
+    # queda de nuevo libre, como si nunca se hubiese generado el documento ni el pago.
+    _delete_invoice_pdf(db, invoice)
+    invoice_number = invoice.invoice_number
+    db.delete(invoice)
+    db.commit()
+    log_action(db, current_user.id, "ELIMINAR", "FACTURA", invoice_id, invoice_number)
+    return {"message": "Documento eliminado"}
 
 
 @router.get("/pending")

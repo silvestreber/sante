@@ -28,7 +28,7 @@
 
 <!-- Modal ver sesión -->
 <div id="view-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Detalle de sesión</h2>
         <dl class="space-y-2 text-sm">
             <div><dt class="text-gray-500">Fecha</dt><dd id="vs-date" class="font-medium"></dd></div>
@@ -44,7 +44,7 @@
 
 <!-- Modal editar observaciones -->
 <div id="edit-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Editar seguimiento</h2>
         <form id="edit-session-form">
             <input type="hidden" id="es-id">
@@ -59,7 +59,7 @@
 
 <!-- Modal registrar pago -->
 <div id="pay-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
         <form id="pay-form" class="space-y-3">
             <input type="hidden" id="pay-invoice-id">

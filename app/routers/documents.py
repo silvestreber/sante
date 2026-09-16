@@ -373,6 +373,14 @@ def sign_consent(
 
 # --- Attendance certificate ---
 
+def _physio_signature(db: Session, physio_id: int | None) -> str | None:
+    """Devuelve la firma (dataURL PNG) del fisio indicado, o None si no tiene o no existe."""
+    if not physio_id:
+        return None
+    physio = db.query(User).filter(User.id == physio_id).first()
+    return physio.signature if physio else None
+
+
 @router.get("/attendance/{patient_id}/pdf")
 def download_attendance_pdf(
     patient_id: int,
@@ -380,6 +388,7 @@ def download_attendance_pdf(
     time: str | None = None,
     duration: int | None = None,
     physio_name: str | None = None,
+    physio_id: int | None = None,
     token: str | None = None,
     db: Session = Depends(get_db),
 ):
@@ -400,9 +409,15 @@ def download_attendance_pdf(
         "time": time or "",
         "duration": duration,
         "physio_name": physio_name or "",
+        "physio_signature": _physio_signature(db, physio_id),
     }
     path = generate_attendance_pdf(data)
-    return FileResponse(path, filename=f"justificante_asistencia_{patient_id}.pdf", media_type="application/pdf")
+    return FileResponse(
+        path,
+        filename=f"justificante_asistencia_{patient_id}.pdf",
+        media_type="application/pdf",
+        content_disposition_type="inline",
+    )
 
 
 @router.post("/attendance/{patient_id}/email")
@@ -413,6 +428,7 @@ def email_attendance(
     time: str | None = None,
     duration: int | None = None,
     physio_name: str | None = None,
+    physio_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -431,6 +447,7 @@ def email_attendance(
         "time": time or "",
         "duration": duration,
         "physio_name": physio_name or "",
+        "physio_signature": _physio_signature(db, physio_id),
     }
     path = generate_attendance_pdf(data)
 

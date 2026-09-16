@@ -3,21 +3,26 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-start justify-between mb-3">
         <h1 id="patient-name" class="text-2xl font-bold text-gray-800"></h1>
-        <div class="flex gap-2">
-            <div class="relative">
-                <button onclick="document.getElementById('actions-dropdown').classList.toggle('hidden')" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Más...</button>
-                <div id="actions-dropdown" class="hidden absolute right-0 mt-1 bg-white border-2 border-sante-primary/40 rounded-lg shadow-lg z-10 min-w-[180px]">
-                    <a id="treatments-btn" href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-sante-bg">Tratamientos</a>
-                    <a id="billing-btn" href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-sante-bg">Pagos</a>
-                    <a id="documents-btn" href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-sante-bg">Documentos</a>
-
-                </div>
-            </div>
-            <a href="/patients" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
-        </div>
+        <a href="/patients" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
     </div>
+
+    <!-- Acciones del paciente -->
+    <div class="flex flex-wrap gap-2 mb-6">
+        <a id="treatments-btn" href="#" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Tratamientos</a>
+        <a id="billing-btn" href="#" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Pagos</a>
+        <a id="documents-btn" href="#" class="text-sm bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">Documentos</a>
+    </div>
+
+    <!-- Toggle Ficha / Historial -->
+    <div class="flex gap-1 mb-6 p-1 bg-sante-primary/10 rounded-full text-xs font-medium">
+        <button type="button" id="tab-ficha" onclick="switchView('ficha')" class="flex-1 px-4 py-1.5 rounded-full bg-sante-primary text-white transition">Ficha</button>
+        <button type="button" id="tab-historial" onclick="switchView('historial')" class="flex-1 px-4 py-1.5 rounded-full text-sante-primary hover:bg-white/60 transition">Historial</button>
+    </div>
+
+    <!-- ===== Vista FICHA ===== -->
+    <div id="view-ficha">
 
     <!-- Alergias destacadas -->
     <div id="allergies-box" class="hidden mb-4 p-4 bg-red-50 border border-red-300 rounded-lg">
@@ -41,11 +46,23 @@
         </div>
     </div>
 
+    </div>
+    <!-- ===== Fin vista FICHA ===== -->
+
+    <!-- ===== Vista HISTORIAL ===== -->
+    <div id="view-historial" class="hidden">
+
     <!-- Historial clínico -->
     <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden mb-6">
-        <div class="flex items-center justify-between p-4 pb-2">
+        <div class="flex flex-wrap items-center justify-between gap-2 p-4 pb-2">
             <h2 class="text-lg font-semibold text-gray-800">Historial clínico</h2>
-            <input type="text" id="history-search" placeholder="Buscar por fecha u observaciones..." class="border-2 border-sante-primary/40 rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-sante-primary">
+            <div class="flex flex-wrap items-center gap-2">
+                <select id="history-order" class="border-2 border-sante-primary/40 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-sante-primary">
+                    <option value="desc">Más recientes primero</option>
+                    <option value="asc">Más antiguas primero</option>
+                </select>
+                <input type="text" id="history-search" placeholder="Buscar por fecha u observaciones..." class="border-2 border-sante-primary/40 rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-sante-primary">
+            </div>
         </div>
         <table class="w-full text-sm">
             <thead class="bg-gray-50">
@@ -60,9 +77,12 @@
         </table>
     </div>
 
+    </div>
+    <!-- ===== Fin vista HISTORIAL ===== -->
+
     <!-- Modal ver sesión -->
     <div id="view-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Detalle de sesión</h2>
             <dl class="space-y-2 text-sm">
                 <div><dt class="text-gray-500">Fecha</dt><dd id="vs-date" class="font-medium"></dd></div>
@@ -78,7 +98,7 @@
 
     <!-- Modal editar observaciones -->
     <div id="edit-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Editar seguimiento</h2>
             <form id="edit-session-form">
                 <input type="hidden" id="es-id">
@@ -93,7 +113,7 @@
 
     <!-- Modal registrar pago sesión -->
     <div id="session-pay-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
             <form id="session-pay-form">
                 <input type="hidden" id="sp-invoice-id">
@@ -114,7 +134,7 @@
 
     <!-- Modal registrar pago bono -->
     <div id="pack-pay-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
             <form id="pack-pay-form" class="space-y-3">
                 <input type="hidden" id="pp-invoice-id">
@@ -135,7 +155,7 @@
 
     <!-- Modal crear bono -->
     <div id="create-pack-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Crear bono</h2>
             <form id="create-pack-form" class="space-y-3">
                 <div>
@@ -182,15 +202,45 @@
     setupNav();
 
     const patientId = window.location.pathname.split('/')[2];
+
+    // Toggle entre la vista de ficha y la de historial (sin recargar).
+    function switchView(view) {
+        const isFicha = view === 'ficha';
+        document.getElementById('view-ficha').classList.toggle('hidden', !isFicha);
+        document.getElementById('view-historial').classList.toggle('hidden', isFicha);
+        // Estilos del toggle: activo = fondo primario/texto blanco.
+        const tabFicha = document.getElementById('tab-ficha');
+        const tabHist = document.getElementById('tab-historial');
+        const active = 'flex-1 px-4 py-1.5 rounded-full bg-sante-primary text-white transition';
+        const inactive = 'flex-1 px-4 py-1.5 rounded-full text-sante-primary hover:bg-white/60 transition';
+        tabFicha.className = isFicha ? active : inactive;
+        tabHist.className = isFicha ? inactive : active;
+    }
     document.getElementById('edit-btn').href = `/patients/${patientId}/edit`;
     document.getElementById('treatments-btn').href = `/patients/${patientId}/treatments`;
     document.getElementById('billing-btn').href = `/patients/${patientId}/billing`;
     document.getElementById('documents-btn').href = `/patients/${patientId}/documents`;
 
-    document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('actions-dropdown');
-        if (!e.target.closest('.relative')) dropdown.classList.add('hidden');
-    });
+    // Pinta (o quita) el icono de "pagos pendientes" junto al nombre. Idempotente:
+    // usa un contenedor propio, así puede recalcularse tras registrar un pago sin duplicar.
+    function refreshPendingBadge() {
+        authFetch(`/api/billing/invoices/patient/${patientId}`).then(r => r.json()).then(invoices => {
+            const hasPending = invoices.some(i => !i.is_paid);
+            let badge = document.getElementById('pending-badge');
+            if (hasPending) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.id = 'pending-badge';
+                    badge.className = 'text-red-600';
+                    badge.title = 'Tiene pagos pendientes';
+                    badge.innerHTML = ' <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>';
+                    document.getElementById('patient-name').appendChild(badge);
+                }
+            } else if (badge) {
+                badge.remove();
+            }
+        });
+    }
 
     function loadPatient() {
         authFetch(`/api/patients/${patientId}`)
@@ -198,13 +248,8 @@
             .then(p => {
                 document.getElementById('patient-name').textContent = `${p.first_name} ${p.last_name}`;
 
-                // Comprobar pagos pendientes
-                authFetch(`/api/billing/invoices/patient/${patientId}`).then(r => r.json()).then(invoices => {
-                    const hasPending = invoices.some(i => !i.is_paid);
-                    if (hasPending) {
-                        document.getElementById('patient-name').innerHTML += ' <span class="text-red-600" title="Tiene pagos pendientes"><svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></span>';
-                    }
-                });
+                // Comprobar pagos pendientes (icono en contenedor propio, recalculable).
+                refreshPendingBadge();
 
                 document.getElementById('p-phone').textContent = p.phone || '-';
                 document.getElementById('p-email').textContent = p.email || '-';
@@ -267,6 +312,7 @@
             document.getElementById('pack-pay-modal').classList.add('hidden');
             showToast('Pago registrado');
             loadPackSummary();
+            refreshPendingBadge();
         } else {
             const err = await res.json();
             showToast(err.detail || 'Error al registrar pago', 'error');
@@ -278,6 +324,12 @@
         authFetch('/api/config/settings').then(r => r.json()).then(s => {
             if (s.default_pack_price) document.getElementById('cp-amount').value = s.default_pack_price;
         });
+        // Nº de sesiones por defecto: 10.
+        document.getElementById('cp-sessions').value = 10;
+        // Caducidad por defecto: hoy + 6 meses.
+        const d = new Date();
+        d.setMonth(d.getMonth() + 6);
+        document.getElementById('cp-expires').value = d.toISOString().slice(0, 10);
         document.getElementById('create-pack-modal').classList.remove('hidden');
     }
 
@@ -300,20 +352,24 @@
             return;
         }
         const packData = await packRes.json();
-        // Crear documento de cobro asociado
-        const invoiceBody = {
-            patient_id: parseInt(patientId),
-            session_pack_id: packData.id,
-            doc_type: document.getElementById('cp-doc-type').value,
-            amount: parseFloat(document.getElementById('cp-amount').value),
-            payment_method: document.getElementById('cp-payment').value || null,
-            is_paid: !!document.getElementById('cp-payment').value,
-        };
-        await authFetch('/api/billing/invoices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(invoiceBody),
-        });
+        // El documento de cobro solo se crea si hay pago. Si queda pendiente, no se
+        // genera documento; se creará al registrar el pago del bono más adelante.
+        const packPayment = document.getElementById('cp-payment').value;
+        if (packPayment) {
+            const invoiceBody = {
+                patient_id: parseInt(patientId),
+                session_pack_id: packData.id,
+                doc_type: document.getElementById('cp-doc-type').value,
+                amount: parseFloat(document.getElementById('cp-amount').value),
+                payment_method: packPayment,
+                is_paid: true,
+            };
+            await authFetch('/api/billing/invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(invoiceBody),
+            });
+        }
         document.getElementById('create-pack-modal').classList.add('hidden');
         showToast('Bono creado');
         loadPackSummary();
@@ -336,19 +392,27 @@
 
     function filterAndRenderSessions() {
         const query = document.getElementById('history-search').value.trim().toLowerCase();
-        if (!query) {
-            renderSessions(sessionsData);
-            return;
+        const order = document.getElementById('history-order').value;
+
+        // Copia para ordenar/filtrar sin mutar sessionsData (renderSessions usa indexOf sobre él).
+        let list = sessionsData.slice();
+        if (query) {
+            list = list.filter(s => {
+                const dateStr = formatDateTime(s.date).toLowerCase();
+                const obs = (s.observations || '').toLowerCase();
+                return dateStr.includes(query) || obs.includes(query);
+            });
         }
-        const filtered = sessionsData.filter(s => {
-            const dateStr = formatDateTime(s.date).toLowerCase();
-            const obs = (s.observations || '').toLowerCase();
-            return dateStr.includes(query) || obs.includes(query);
+        // Orden por fecha: desc = más recientes primero (por defecto); asc = más antiguas primero.
+        list.sort((a, b) => {
+            const diff = new Date(a.date) - new Date(b.date);
+            return order === 'asc' ? diff : -diff;
         });
-        renderSessions(filtered);
+        renderSessions(list);
     }
 
     document.getElementById('history-search').addEventListener('input', filterAndRenderSessions);
+    document.getElementById('history-order').addEventListener('change', filterAndRenderSessions);
 
     function renderSessions(sessions) {
         const tbody = document.getElementById('sessions-body');
@@ -440,6 +504,7 @@
             document.getElementById('session-pay-modal').classList.add('hidden');
             showToast('Pago registrado');
             loadHistory();
+            refreshPendingBadge();
         } else {
             const err = await res.json();
             showToast(err.detail || 'Error al registrar pago', 'error');

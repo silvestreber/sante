@@ -2,40 +2,48 @@
 {% block title %}Santé - Facturación paciente{% endblock %}
 
 {% block content %}
-<div>
+<div class="max-w-3xl mx-auto">
     <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-gray-800">Facturación: <span id="patient-name"></span></h1>
         <a id="back-link" href="#" class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 inline-flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Volver</a>
     </div>
 
-    <!-- Crear factura -->
+    <!-- Registrar pago -->
     <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4 mb-6">
-        <h2 class="font-semibold text-gray-700 mb-3">Nuevo documento de cobro</h2>
-        <form id="invoice-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <select id="inv-doc-type" class="border rounded px-3 py-2 text-sm" required>
+        <h2 class="font-semibold text-gray-700 mb-3">Registrar pago</h2>
+
+        <!-- Toggle: cita / bono -->
+        <div class="flex gap-1 mb-4 p-1 bg-sante-primary/10 rounded-full text-xs font-medium">
+            <button type="button" id="pay-tab-appointment" onclick="switchPayMode('appointment')" class="flex-1 px-4 py-1.5 rounded-full bg-sante-primary text-white transition">Cita</button>
+            <button type="button" id="pay-tab-pack" onclick="switchPayMode('pack')" class="flex-1 px-4 py-1.5 rounded-full text-sante-primary hover:bg-white/60 transition">Bono</button>
+        </div>
+
+        <!-- Mensaje si no hay pendientes -->
+        <p id="pay-empty" class="hidden text-sm text-gray-500 py-2"></p>
+
+        <!-- Formulario de pago -->
+        <form id="invoice-form" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select id="inv-target" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required></select>
+            <div class="relative">
+                <input id="inv-amount" type="number" step="0.01" min="0" placeholder="Importe" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 pr-8 text-sm" required>
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">€</span>
+            </div>
+            <select id="inv-payment" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
+                <option value="CASH">Efectivo</option>
+                <option value="BIZUM">Bizum</option>
+            </select>
+            <select id="inv-doc-type" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
                 <option value="RECEIPT">Justificante</option>
                 <option value="INVOICE">Factura</option>
                 <option value="SIMPLIFIED_INVOICE">Factura simplificada</option>
             </select>
-            <input id="inv-amount" type="number" step="0.01" min="0" placeholder="Importe (€)" class="border rounded px-3 py-2 text-sm" required>
-            <select id="inv-appointment" class="border rounded px-3 py-2 text-sm">
-                <option value="">Sin cita asociada</option>
-            </select>
-            <select id="inv-pack" class="border rounded px-3 py-2 text-sm">
-                <option value="">Sin bono asociado</option>
-            </select>
-            <select id="inv-payment" class="border rounded px-3 py-2 text-sm">
-                <option value="">Pendiente de pago</option>
-                <option value="CASH">Efectivo</option>
-                <option value="BIZUM">Bizum</option>
-            </select>
-            <button type="submit" class="bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Crear</button>
+            <button type="submit" class="sm:col-span-2 bg-sante-primary text-white px-4 py-2 rounded text-sm hover:bg-sante-primary/90">Registrar</button>
         </form>
     </div>
 
     <!-- Lista de facturas -->
     <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow mb-6">
-        <h2 class="font-semibold text-gray-700 p-4 pb-2">Documentos de cobro</h2>
+        <h2 class="font-semibold text-gray-700 p-4 pb-2">Historial</h2>
         <div id="invoices-list" class="p-4 pt-0">
             <p class="text-gray-500 text-sm">Cargando...</p>
         </div>
@@ -44,7 +52,7 @@
 
 <!-- Modal editar factura -->
 <div id="edit-invoice-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Editar documento de cobro</h2>
         <form id="edit-invoice-form" class="space-y-3">
             <input type="hidden" id="edit-inv-id">
@@ -90,7 +98,7 @@
 
 <!-- Modal registrar pago -->
 <div id="billing-pay-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Registrar pago</h2>
         <form id="billing-pay-form" class="space-y-3">
             <input type="hidden" id="bp-invoice-id">
@@ -112,7 +120,7 @@
 
 <!-- Modal email -->
 <div id="email-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 class="text-lg font-semibold text-gray-800 mb-3">Email no configurado</h2>
         <p class="text-sm text-gray-600 mb-4">Este paciente no tiene email registrado. Introduce uno para enviar el documento:</p>
         <input type="email" id="email-input" placeholder="email@ejemplo.com" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm mb-4" required>
@@ -138,31 +146,90 @@
         document.getElementById('patient-name').textContent = `${p.first_name} ${p.last_name}`;
     }
 
-    async function loadAppointments() {
+    // --- Registrar pago: modo cita / bono ---
+    let payMode = 'appointment';
+    let pendingAppointments = [];  // citas finalizadas pendientes de cobro
+    let pendingPacks = [];         // bonos pendientes de cobro
+
+    // Carga las citas finalizadas pendientes de cobro (sin documento y no pagadas con bono).
+    async function loadPendingAppointments() {
         const now = new Date();
         const past = new Date(now.getTime() - 365 * 86400000);
         const res = await authFetch(`/api/appointments?start=${past.toISOString()}&end=${now.toISOString()}&patient_id=${patientId}`);
         const apts = await res.json();
         const invRes = await authFetch(`/api/billing/invoices/patient/${patientId}`);
         const invoices = await invRes.json();
-        const paidAptIds = invoices.filter(i => i.appointment_id).map(i => i.appointment_id);
-
-        const select = document.getElementById('inv-appointment');
-        apts.filter(a => a.status === 'FINALIZED' && !paidAptIds.includes(a.id)).forEach(a => {
-            const dt = new Date(a.start_time);
-            const label = `${formatDate(a.start_time)} ${dt.toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'})} - ${a.physio_name}`;
-            select.innerHTML += `<option value="${a.id}">${label}</option>`;
-        });
+        const usedAptIds = invoices.filter(i => i.appointment_id).map(i => i.appointment_id);
+        pendingAppointments = apts.filter(a => a.status === 'FINALIZED' && !usedAptIds.includes(a.id) && !a.paid_with_pack);
     }
 
-    async function loadPacks() {
+    // Carga los bonos pendientes de cobro (sin documento de pago aún).
+    async function loadPendingPacks() {
         const res = await authFetch(`/api/billing/packs/patient/${patientId}`);
         const packs = await res.json();
-        const select = document.getElementById('inv-pack');
-        packs.filter(p => !p.is_cancelled && p.pending_invoice_id).forEach(p => {
-            const expired = p.expired ? ' (CADUCADO)' : '';
-            select.innerHTML += `<option value="${p.id}">Bono ${p.total_sessions} sesiones (${p.remaining} restantes) - ${p.price.toFixed(2)}&euro;${expired}</option>`;
-        });
+        const invRes = await authFetch(`/api/billing/invoices/patient/${patientId}`);
+        const invoices = await invRes.json();
+        const paidPackIds = invoices.filter(i => i.session_pack_id && i.is_paid).map(i => i.session_pack_id);
+        // Pendiente = bono no cancelado y sin documento de cobro pagado asociado.
+        pendingPacks = packs.filter(p => !p.is_cancelled && !paidPackIds.includes(p.id));
+    }
+
+    // Cambia entre modo cita y bono y repinta el formulario.
+    function switchPayMode(mode) {
+        payMode = mode;
+        const isApt = mode === 'appointment';
+        const tabApt = document.getElementById('pay-tab-appointment');
+        const tabPack = document.getElementById('pay-tab-pack');
+        const active = 'flex-1 px-4 py-1.5 rounded-full bg-sante-primary text-white transition';
+        const inactive = 'flex-1 px-4 py-1.5 rounded-full text-sante-primary hover:bg-white/60 transition';
+        tabApt.className = isApt ? active : inactive;
+        tabPack.className = isApt ? inactive : active;
+        renderPayForm();
+    }
+
+    // Rellena el desplegable según el modo y muestra el formulario o el mensaje vacío.
+    function renderPayForm() {
+        const form = document.getElementById('invoice-form');
+        const empty = document.getElementById('pay-empty');
+        const target = document.getElementById('inv-target');
+        const items = payMode === 'appointment' ? pendingAppointments : pendingPacks;
+
+        if (!items.length) {
+            form.classList.add('hidden');
+            empty.classList.remove('hidden');
+            empty.textContent = payMode === 'appointment'
+                ? 'No hay citas pendientes de pago.'
+                : 'No hay bonos pendientes de pago.';
+            return;
+        }
+        empty.classList.add('hidden');
+        form.classList.remove('hidden');
+
+        if (payMode === 'appointment') {
+            target.innerHTML = pendingAppointments.map(a => {
+                const dt = new Date(a.start_time);
+                const label = `${formatDate(a.start_time)} ${dt.toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'})} - ${a.physio_name}`;
+                const amount = (a.amount != null) ? a.amount : (window.defaultSessionPrice || 0);
+                return `<option value="${a.id}" data-amount="${amount}">${label}</option>`;
+            }).join('');
+        } else {
+            target.innerHTML = pendingPacks.map(p => {
+                const expired = p.expired ? ' (CADUCADO)' : '';
+                const amount = (p.price != null) ? p.price : (window.defaultPackPrice || 0);
+                return `<option value="${p.id}" data-amount="${amount}">Bono ${p.total_sessions} sesiones (${p.remaining} restantes)${expired}</option>`;
+            }).join('');
+        }
+        // Autorrellenar el importe con el del primer elemento seleccionado.
+        updateAmountFromTarget();
+    }
+
+    // Pone en el importe el valor del elemento seleccionado (editable después).
+    function updateAmountFromTarget() {
+        const target = document.getElementById('inv-target');
+        const opt = target.options[target.selectedIndex];
+        if (opt && opt.dataset.amount != null) {
+            document.getElementById('inv-amount').value = opt.dataset.amount;
+        }
     }
 
     async function loadInvoices() {
@@ -193,7 +260,7 @@
                 </thead>
                 <tbody>
                     ${data.map(i => `
-                        <tr class="border-t">
+                        <tr class="border-t cursor-pointer hover:bg-sante-bg/30" onclick="viewInvoicePdf(${i.id})" title="Ver documento">
                             <td class="px-3 py-2 text-xs">${i.is_paid ? formatDate(i.created_at) : '-'}</td>
                             <td class="px-3 py-2">${typeLabels[i.doc_type] || i.doc_type}</td>
                             <td class="px-3 py-2">${i.appointment_date || i.session_pack_label || '-'}</td>
@@ -205,11 +272,10 @@
                                 </span>
                             </td>
                             <td class="px-3 py-2 text-center space-x-1">
-                                <button onclick="openEditModal(${JSON.stringify(i).replace(/"/g, '&quot;')})" class="text-yellow-600 hover:text-yellow-400" title="Editar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
-                                ${!i.is_paid ? `<button onclick="openPayModal(${i.id}, ${i.appointment_id ? 'true' : 'false'})" class="text-sante-primary hover:text-sante-primary/70" title="Registrar pago"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></button>` : ''}
-                                <button onclick="viewInvoicePdf(${i.id})" class="text-blue-600 hover:text-blue-400" title="Ver documento"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
-                                <button onclick="sendInvoiceEmail(${i.id})" class="text-purple-600 hover:text-purple-400" title="Enviar documento de cobro por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
-                                <button onclick="deleteInvoice(${i.id}, '${i.invoice_number}')" class="text-red-500 hover:text-red-700" title="Eliminar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+                                <button onclick="event.stopPropagation(); openEditModal(${JSON.stringify(i).replace(/"/g, '&quot;')})" class="text-yellow-600 hover:text-yellow-400" title="Editar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
+                                ${!i.is_paid ? `<button onclick="event.stopPropagation(); openPayModal(${i.id}, ${i.appointment_id ? 'true' : 'false'})" class="text-sante-primary hover:text-sante-primary/70" title="Registrar pago"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></button>` : ''}
+                                <button onclick="event.stopPropagation(); sendInvoiceEmail(${i.id})" class="text-purple-600 hover:text-purple-400" title="Enviar documento de cobro por email"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                <button onclick="event.stopPropagation(); deleteInvoice(${i.id}, '${i.invoice_number}')" class="text-red-500 hover:text-red-700" title="Eliminar"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
                             </td>
                         </tr>
                     `).join('')}
@@ -218,17 +284,18 @@
         `;
     }
 
-    // Create invoice
+    // Registrar pago (cita o bono). El documento se crea siempre pagado (aquí siempre hay método de pago).
     document.getElementById('invoice-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const targetId = parseInt(document.getElementById('inv-target').value);
         const body = {
             patient_id: parseInt(patientId),
             doc_type: document.getElementById('inv-doc-type').value,
             amount: parseFloat(document.getElementById('inv-amount').value),
-            appointment_id: document.getElementById('inv-appointment').value ? parseInt(document.getElementById('inv-appointment').value) : null,
-            session_pack_id: document.getElementById('inv-pack').value ? parseInt(document.getElementById('inv-pack').value) : null,
-            payment_method: document.getElementById('inv-payment').value || null,
-            is_paid: !!document.getElementById('inv-payment').value,
+            appointment_id: payMode === 'appointment' ? targetId : null,
+            session_pack_id: payMode === 'pack' ? targetId : null,
+            payment_method: document.getElementById('inv-payment').value,
+            is_paid: true,
         };
         const res = await authFetch('/api/billing/invoices', {
             method: 'POST',
@@ -236,13 +303,19 @@
             body: JSON.stringify(body),
         });
         if (res.ok) {
-            e.target.reset();
+            showToast('Pago registrado');
+            // Recargar pendientes y refrescar el formulario y el historial.
+            await Promise.all([loadPendingAppointments(), loadPendingPacks()]);
+            renderPayForm();
             loadInvoices();
         } else {
             const err = await res.json();
-            showToast(err.detail || 'Error al crear documento', 'error');
+            showToast(err.detail || 'Error al registrar el pago', 'error');
         }
     });
+
+    // Al cambiar el elemento seleccionado, autorrellenar el importe.
+    document.getElementById('inv-target').addEventListener('change', updateAmountFromTarget);
 
     // Editar factura
     function openEditModal(inv) {
@@ -255,16 +328,18 @@
         const packSelect = document.getElementById('edit-inv-pack');
         aptSelect.innerHTML = '<option value="">Sin cita asociada</option>';
         packSelect.innerHTML = '<option value="">Sin bono asociado</option>';
-        // Copiar opciones del formulario de creación
-        document.getElementById('inv-appointment').querySelectorAll('option').forEach(o => {
-            if (o.value) aptSelect.innerHTML += `<option value="${o.value}">${o.textContent}</option>`;
+        // Opciones de citas: las pendientes en memoria + la cita actual de la factura.
+        pendingAppointments.forEach(a => {
+            const dt = new Date(a.start_time);
+            const label = `${formatDate(a.start_time)} ${dt.toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'})} - ${a.physio_name}`;
+            aptSelect.innerHTML += `<option value="${a.id}">${label}</option>`;
         });
-        // Añadir la cita actual si no está en la lista
         if (inv.appointment_id && !aptSelect.querySelector(`option[value="${inv.appointment_id}"]`)) {
             aptSelect.innerHTML += `<option value="${inv.appointment_id}">${inv.appointment_date || 'Cita #' + inv.appointment_id}</option>`;
         }
-        document.getElementById('inv-pack').querySelectorAll('option').forEach(o => {
-            if (o.value) packSelect.innerHTML += `<option value="${o.value}">${o.textContent}</option>`;
+        // Opciones de bonos: los pendientes en memoria + el bono actual de la factura.
+        pendingPacks.forEach(p => {
+            packSelect.innerHTML += `<option value="${p.id}">Bono ${p.total_sessions} sesiones</option>`;
         });
         if (inv.session_pack_id && !packSelect.querySelector(`option[value="${inv.session_pack_id}"]`)) {
             packSelect.innerHTML += `<option value="${inv.session_pack_id}">${inv.session_pack_label || 'Bono #' + inv.session_pack_id}</option>`;
@@ -347,7 +422,9 @@
 
     // Ver PDF
     function viewInvoicePdf(id) {
-        authFetch(`/api/billing/invoices/${id}/pdf`)
+        // Cache-buster (?t=timestamp) para que el navegador no sirva un PDF antiguo
+        // cacheado tras regenerarlo (p.ej. al cambiar el tipo de documento).
+        authFetch(`/api/billing/invoices/${id}/pdf?t=${Date.now()}`)
             .then(r => {
                 if (!r.ok) { showToast('PDF no disponible', 'error'); return; }
                 return r.blob();
@@ -433,7 +510,10 @@
         showConfirm('Eliminar documento', 'Se eliminara el documento ' + number + ' y su PDF asociado. Esta accion no se puede deshacer.', async () => {
             const res = await authFetch(`/api/billing/invoices/${pendingDeleteInvoiceId}`, { method: 'DELETE' });
             if (res.ok) {
-                showToast('Documento eliminado');
+                const data = await res.json().catch(() => ({}));
+                // El backend puede eliminar el documento o, si está ligado a una
+                // cita/bono, revertir el pago dejándolo pendiente. Mostramos su mensaje real.
+                showToast(data.message || 'Documento eliminado');
                 loadInvoices();
             } else {
                 const err = await res.json();
@@ -442,9 +522,27 @@
         });
     }
 
-    loadPatient();
-    loadAppointments();
-    loadPacks();
-    loadInvoices();
+    // Precios por defecto (fallback para autorrellenar el importe).
+    async function loadSettings() {
+        try {
+            const res = await authFetch('/api/config/settings');
+            const data = await res.json();
+            window.defaultSessionPrice = data.default_session_price || 0;
+            window.defaultPackPrice = data.default_pack_price || 0;
+        } catch (e) {
+            window.defaultSessionPrice = 0;
+            window.defaultPackPrice = 0;
+        }
+    }
+
+    // Arranque: cargar todo y pintar el formulario de pago.
+    async function init() {
+        await loadSettings();
+        loadPatient();
+        await Promise.all([loadPendingAppointments(), loadPendingPacks()]);
+        renderPayForm();
+        loadInvoices();
+    }
+    init();
 </script>
 {% endblock %}

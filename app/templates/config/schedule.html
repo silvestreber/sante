@@ -169,11 +169,7 @@
         <form id="settings-form" class="space-y-4">
             <div>
                 <label class="block text-sm text-gray-600 mb-1">Duración predeterminada de cita (minutos)</label>
-                <select id="setting-duration" class="border rounded px-3 py-2 text-sm">
-                    <option value="30">30 min</option>
-                    <option value="45">45 min</option>
-                    <option value="60">60 min</option>
-                </select>
+                <input type="number" id="setting-duration" min="1" step="1" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm w-32">
             </div>
             <div>
                 <label class="block text-sm text-gray-600 mb-1">Precio sesión por defecto (€)</label>
@@ -310,7 +306,7 @@
 
 <!-- Modal cambio de ubicación -->
 <div id="storage-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h3 class="font-semibold text-gray-800" id="storage-modal-title">Cambiar ubicación</h3>
         <div>
             <label class="block text-sm text-gray-600 mb-1">Nueva ruta (absoluta)</label>

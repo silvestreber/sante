@@ -6,17 +6,17 @@
     <button onclick="openModal()" class="bg-sante-primary text-white px-4 py-2 rounded hover:bg-sante-primary/90">+ Nuevo usuario</button>
 </div>
 
-<div class="bg-white border-2 border-sante-primary/40 rounded shadow overflow-x-auto">
+<div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-hidden overflow-x-auto">
     <table class="w-full text-sm">
-        <thead class="bg-gray-100 text-left">
+        <thead class="bg-gray-50 text-gray-600 text-left">
             <tr>
-                <th class="px-4 py-2">Nombre</th>
-                <th class="px-4 py-2">Usuario</th>
-                <th class="px-4 py-2">Rol</th>
-                <th class="px-4 py-2">Fisio</th>
-                <th class="px-4 py-2">Colaborador</th>
-                <th class="px-4 py-2">Estado</th>
-                <th class="px-4 py-2">Acciones</th>
+                <th class="px-4 py-3">Nombre</th>
+                <th class="px-4 py-3">Usuario</th>
+                <th class="px-4 py-3">Rol</th>
+                <th class="px-4 py-3">Fisio</th>
+                <th class="px-4 py-3">Colaborador</th>
+                <th class="px-4 py-3">Estado</th>
+                <th class="px-4 py-3">Acciones</th>
             </tr>
         </thead>
         <tbody id="users-table"></tbody>
@@ -25,22 +25,22 @@
 
 <!-- Modal -->
 <div id="modal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
-        <h2 id="modal-title" class="text-lg font-bold mb-4">Nuevo usuario</h2>
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <h2 id="modal-title" class="text-lg font-semibold text-gray-800 mb-4">Nuevo usuario</h2>
         <form id="user-form" class="space-y-3">
             <input type="hidden" id="user-id">
             <div>
                 <label class="block text-sm font-medium text-gray-700">Nombre completo</label>
-                <input id="full_name" type="text" required class="w-full border rounded px-3 py-2">
+                <input id="full_name" type="text" required class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700">Usuario</label>
-                <input id="username" type="text" required class="w-full border rounded px-3 py-2">
+                <input id="username" type="text" required class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700">Contraseña <span id="pwd-hint" class="text-xs text-gray-400"></span></label>
                 <div class="relative">
-                    <input id="password" type="password" class="w-full border rounded px-3 py-2 pr-10">
+                    <input id="password" type="password" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 pr-10 text-sm">
                     <button type="button" onclick="togglePassword()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                         <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </button>
@@ -48,7 +48,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700">Rol</label>
-                <select id="role" required class="w-full border rounded px-3 py-2">
+                <select id="role" required class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
                     <option value="ADMIN">Administrador</option>
                     <option value="RECEPTION">Recepción</option>
                     <option value="PHYSIO">Fisioterapeuta</option>
@@ -73,9 +73,19 @@
                     <span id="color-preview" class="text-xs text-gray-500">#0d9488</span>
                 </div>
             </div>
+            <!-- Firma del fisio: solo visible si es fisioterapeuta. Se estampa en los justificantes de asistencia. -->
+            <div id="signature-row" class="hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Firma (para justificantes de asistencia)</label>
+                <p id="signature-status" class="hidden text-xs text-green-600 mb-1"></p>
+                <div class="border-2 border-sante-primary/40 rounded-lg bg-gray-50 relative">
+                    <canvas id="sig-canvas" class="w-full touch-none rounded-lg" style="height:180px"></canvas>
+                    <button type="button" onclick="clearSignature()" class="absolute top-2 right-2 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-100">Borrar</button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Firme con el dedo (tablet/móvil) o con el ratón. Dibuje solo si desea establecer o cambiar la firma.</p>
+            </div>
             <div class="flex justify-end gap-2 pt-2">
-                <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded">Cancelar</button>
-                <button type="submit" class="px-4 py-2 bg-sante-primary text-white rounded hover:bg-sante-primary/90">Guardar</button>
+                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-sante-primary text-white rounded text-sm hover:bg-sante-primary/90">Guardar</button>
             </div>
         </form>
     </div>
@@ -91,27 +101,27 @@ async function loadUsers() {
     const users = await res.json();
     const tbody = document.getElementById('users-table');
     tbody.innerHTML = users.map(u => `
-        <tr class="border-t">
-            <td class="px-4 py-2">${u.full_name}</td>
-            <td class="px-4 py-2">${u.username}</td>
-            <td class="px-4 py-2">${roleLabels[u.role] || u.role}</td>
-            <td class="px-4 py-2">
+        <tr class="border-t hover:bg-gray-50">
+            <td class="px-4 py-3 font-medium">${u.full_name}</td>
+            <td class="px-4 py-3">${u.username}</td>
+            <td class="px-4 py-3">${roleLabels[u.role] || u.role}</td>
+            <td class="px-4 py-3">
                 <span class="px-2 py-0.5 rounded text-xs ${u.is_physio ? 'bg-sante-bg text-sante-primary' : 'bg-gray-100 text-gray-500'}">
                     ${u.is_physio ? 'Sí' : 'No'}
                 </span>
                 ${u.is_physio && u.color ? `<span class="inline-block w-4 h-4 rounded-full ml-2 align-middle border border-gray-300" style="background:${u.color}"></span>` : ''}
             </td>
-            <td class="px-4 py-2">
+            <td class="px-4 py-3">
                 <span class="px-2 py-0.5 rounded text-xs ${u.is_colaborador ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}">
                     ${u.is_colaborador ? 'Sí' : 'No'}
                 </span>
             </td>
-            <td class="px-4 py-2">
+            <td class="px-4 py-3">
                 <span class="px-2 py-0.5 rounded text-xs ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
                     ${u.is_active ? 'Activo' : 'Inactivo'}
                 </span>
             </td>
-            <td class="px-4 py-2 flex gap-2">
+            <td class="px-4 py-3 flex gap-2">
                 <button onclick='editUser(${JSON.stringify(u)})' class="text-sante-primary hover:underline text-xs">Editar</button>
                 <button onclick="toggleActive(${u.id}, ${u.is_active})" class="text-xs ${u.is_active ? 'text-red-600' : 'text-green-600'} hover:underline">
                     ${u.is_active ? 'Desactivar' : 'Activar'}
@@ -130,6 +140,8 @@ function openModal() {
     document.getElementById('pwd-hint').textContent = '';
     document.getElementById('user-color').value = '#0d9488';
     document.getElementById('color-preview').textContent = '#0d9488';
+    document.getElementById('signature-status').classList.add('hidden');
+    clearSignature();
     toggleColorPicker();
     document.getElementById('modal').classList.remove('hidden');
 }
@@ -152,6 +164,14 @@ function editUser(u) {
     document.getElementById('is_colaborador').checked = u.is_colaborador;
     document.getElementById('user-color').value = u.color || '#0d9488';
     document.getElementById('color-preview').textContent = u.color || '#0d9488';
+    clearSignature();
+    const sigStatus = document.getElementById('signature-status');
+    if (u.has_signature) {
+        sigStatus.textContent = '✓ Firma guardada. Dibuje una nueva solo si desea reemplazarla.';
+        sigStatus.classList.remove('hidden');
+    } else {
+        sigStatus.classList.add('hidden');
+    }
     toggleColorPicker();
     document.getElementById('modal').classList.remove('hidden');
 }
@@ -174,6 +194,10 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
         is_colaborador: document.getElementById('is_colaborador').checked,
         color: document.getElementById('is_physio').checked ? document.getElementById('user-color').value : null,
     };
+    // Firma: se envía solo si el admin ha dibujado trazos nuevos. Si no, se
+    // omite y el backend mantiene la firma existente (patrón `is not None`).
+    const newSignature = getSignaturePng();
+    if (newSignature) body.signature = newSignature;
     if (id) {
         const pwd = document.getElementById('password').value;
         if (pwd) body.password = pwd;
@@ -207,6 +231,9 @@ document.getElementById('role').addEventListener('change', (e) => {
 function toggleColorPicker() {
     const show = document.getElementById('is_physio').checked;
     document.getElementById('color-picker-row').classList.toggle('hidden', !show);
+    document.getElementById('signature-row').classList.toggle('hidden', !show);
+    // Preparar el canvas cuando el bloque pasa a ser visible (necesita medir su tamaño real).
+    if (show) setTimeout(setupSignatureCanvas, 30);
 }
 
 function togglePassword() {
@@ -217,5 +244,68 @@ function togglePassword() {
 document.getElementById('user-color').addEventListener('input', (e) => {
     document.getElementById('color-preview').textContent = e.target.value;
 });
+
+// ---------- Canvas de firma (mismo componente que consentimientos) ----------
+const sig = { canvas: null, ctx: null, drawing: false, dirty: false, init: false };
+
+function setupSignatureCanvas() {
+    const canvas = document.getElementById('sig-canvas');
+    if (!canvas) return;
+    sig.canvas = canvas;
+    // Ajustar la resolución del canvas al tamaño real que ocupa (nitidez y coordenadas correctas).
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0) return; // aún no visible
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1a1a2e';
+    sig.ctx = ctx;
+    sig.dirty = false;
+
+    if (sig.init) return; // no volver a registrar listeners
+    sig.init = true;
+
+    const pos = (e) => {
+        const r = canvas.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    canvas.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        sig.drawing = true; sig.dirty = true;
+        canvas.setPointerCapture(e.pointerId);
+        const p = pos(e);
+        sig.ctx.beginPath();
+        sig.ctx.moveTo(p.x, p.y);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+        if (!sig.drawing) return;
+        e.preventDefault();
+        const p = pos(e);
+        sig.ctx.lineTo(p.x, p.y);
+        sig.ctx.stroke();
+    });
+    const stop = () => { sig.drawing = false; };
+    canvas.addEventListener('pointerup', stop);
+    canvas.addEventListener('pointerleave', stop);
+    canvas.addEventListener('pointercancel', stop);
+}
+
+function clearSignature() {
+    if (sig.canvas && sig.ctx) {
+        sig.ctx.clearRect(0, 0, sig.canvas.width, sig.canvas.height);
+        sig.dirty = false;
+    }
+}
+
+// Devuelve el PNG (dataURL) de la firma, o null si no se ha dibujado nada nuevo.
+function getSignaturePng() {
+    if (!sig.canvas || !sig.dirty) return null;
+    return sig.canvas.toDataURL('image/png');
+}
 </script>
 {% endblock %}

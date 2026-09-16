@@ -98,7 +98,7 @@
 
     <!-- Modal de confirmación global -->
     <div id="global-confirm-modal" class="hidden fixed inset-0 z-[200] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 id="global-confirm-title" class="text-lg font-semibold text-gray-800 mb-3"></h2>
             <p id="global-confirm-text" class="text-sm text-gray-600 mb-5"></p>
             <div class="flex gap-2">
@@ -110,7 +110,7 @@
 
     <!-- Modal de aviso global (solo informativo) -->
     <div id="global-alert-modal" class="hidden fixed inset-0 z-[200] flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
-        <div class="bg-white border-2 border-amber-400 rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+        <div class="bg-white border-2 border-amber-400 rounded-lg shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center gap-2 mb-3">
                 <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                 <h2 id="global-alert-title" class="text-lg font-semibold text-gray-800"></h2>
@@ -270,6 +270,30 @@
             });
         }
 
+        // --- Sesión deslizante ---
+        // El token vive 30 min. La actividad REAL del usuario (clic, tecla, scroll,
+        // touch) refresca el token, reiniciando la ventana. Las peticiones de fondo
+        // (badge de avisos, etc.) NO cuentan como actividad, para que 30 min sin
+        // interacción caduquen la sesión y el siguiente 401 expulse al usuario.
+        let _userActive = false;
+        function markUserActivity() { _userActive = true; }
+        ['click', 'keydown', 'mousedown', 'touchstart', 'scroll'].forEach(ev =>
+            window.addEventListener(ev, markUserActivity, { passive: true })
+        );
+
+        function refreshTokenIfActive() {
+            if (!_userActive) return;      // sin actividad reciente -> no renovamos
+            if (!getToken()) return;
+            _userActive = false;           // reseteamos hasta la próxima interacción
+            fetch('/api/auth/refresh', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken() }
+            }).then(r => {
+                if (r.ok) return r.json().then(d => { if (d.token) localStorage.setItem('token', d.token); });
+                if (r.status === 401) logout();
+            }).catch(() => {});
+        }
+
         function updateNotificationBadge() {
             authFetch('/api/notifications/unread-count').then(r => r.json()).then(data => {
                 const badge = document.getElementById('notif-badge');
@@ -286,6 +310,10 @@
             setupNav();
             updateNotificationBadge();
             setInterval(updateNotificationBadge, 60000);
+
+            // Sesión deslizante: cada 5 min, si hubo actividad del usuario, renueva el token.
+            // Así la sesión aguanta mientras se usa y solo caduca tras 30 min de inactividad.
+            setInterval(refreshTokenIfActive, 5 * 60 * 1000);
 
             // WebSocket para notificaciones en tiempo real
             (function connectWS() {
