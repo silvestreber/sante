@@ -75,6 +75,9 @@ class Patient(Base):
     anamnesis = Column(Text, nullable=True)
     tratamiento_contraindicaciones = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
+    # True mientras el paciente sólo tiene datos mínimos (nombre, tel, email) para una
+    # cita "sin registrar". Al completar su ficha clínica pasa a False.
+    is_provisional = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     documents = relationship("PatientDocument", back_populates="patient", cascade="all, delete-orphan")
@@ -129,10 +132,14 @@ class ClinicalSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
-    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False)
-    physio_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # Nullable: las sesiones añadidas manualmente al historial (anteriores o externas
+    # a la clínica) no tienen una cita asociada.
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
+    physio_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     observations = Column(Text, nullable=True)
+    # True cuando la sesión se registró a mano en el historial (no proviene de una cita).
+    is_manual = Column(Boolean, default=False)
 
     patient = relationship("Patient", back_populates="sessions")
     appointment = relationship("Appointment")

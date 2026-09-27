@@ -195,11 +195,31 @@
             <form id="apt-form" class="space-y-3">
                 <input type="hidden" id="apt-id">
                 <div>
-                    <label class="text-sm text-gray-600">Paciente</label>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm text-gray-600">Paciente</label>
+                        <button type="button" id="toggle-new-patient" onclick="toggleNewPatient()" class="text-xs text-sante-primary hover:underline">+ Paciente nuevo (sin ficha)</button>
+                    </div>
                     <div class="relative">
                         <input type="text" id="patient-search" placeholder="Buscar paciente..." class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" autocomplete="off">
                         <input type="hidden" id="apt-patient" required>
-                        <div id="patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-40 overflow-y-auto"></div>
+                        <div id="patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-72 overflow-y-auto"></div>
+                    </div>
+                    <!-- Aviso: paciente sin ficha completa (en edición de cita) -->
+                    <div id="apt-provisional-note" class="hidden mt-2 p-2 bg-amber-50 border border-amber-300 rounded text-xs text-amber-800 flex items-center justify-between gap-2">
+                        <span>Paciente sin ficha completa.</span>
+                        <a id="apt-complete-file-btn" href="#" class="shrink-0 bg-amber-500 text-white px-3 py-1 rounded hover:bg-amber-600">Completar ficha</a>
+                    </div>
+                    <!-- Mini-formulario paciente provisional (sin ficha) -->
+                    <div id="new-patient-box" class="hidden mt-2 p-3 border-2 border-sante-primary/40 rounded bg-sante-bg/30 space-y-2">
+                        <p class="text-xs text-gray-500">Se creará un paciente sin ficha. Podrás completarla cuando acuda.</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="np-first-name" placeholder="Nombre" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                            <input type="text" id="np-last-name" placeholder="Apellidos" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="tel" id="np-phone" placeholder="Teléfono" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                            <input type="email" id="np-email" placeholder="Email (opcional)" class="border-2 border-sante-primary/40 rounded px-3 py-2 text-sm">
+                        </div>
                     </div>
                 </div>
                 <div>
@@ -406,7 +426,7 @@
                 <div class="relative">
                     <input type="text" id="wl-patient-search" placeholder="Buscar paciente..." class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" autocomplete="off">
                     <input type="hidden" id="wl-patient">
-                    <div id="wl-patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-40 overflow-y-auto"></div>
+                    <div id="wl-patient-results" class="hidden absolute z-10 w-full bg-white border-2 border-sante-primary/40 rounded-b shadow-lg max-h-72 overflow-y-auto"></div>
                 </div>
             </div>
             <div>
@@ -856,6 +876,14 @@
         document.getElementById('apt-id').value = '';
         document.getElementById('apt-patient').value = '';
         document.getElementById('apt-start').value = '';
+        // Ocultar/limpiar el mini-formulario de paciente nuevo sin ficha.
+        const npBox = document.getElementById('new-patient-box');
+        if (npBox) {
+            npBox.classList.add('hidden');
+            ['np-first-name', 'np-last-name', 'np-phone', 'np-email'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            const npToggle = document.getElementById('toggle-new-patient');
+            if (npToggle) npToggle.textContent = '+ Paciente nuevo (sin ficha)';
+        }
         const slotEl = document.getElementById('apt-slot');
         slotEl.innerHTML = '<option value="">Elige día y fisio</option>';
         slotEl.size = 1;
@@ -870,6 +898,12 @@
         document.getElementById('patient-search').classList.remove('hidden');
         document.getElementById('patient-search').value = '';
         document.getElementById('patient-search').readOnly = false;
+        // Botón de paciente nuevo: visible por defecto (nueva cita).
+        const npToggleBtn = document.getElementById('toggle-new-patient');
+        if (npToggleBtn) npToggleBtn.classList.remove('hidden');
+        // Ocultar aviso de paciente provisional.
+        const apnote = document.getElementById('apt-provisional-note');
+        if (apnote) apnote.classList.add('hidden');
         resetPatientNameLink();
         document.getElementById('patient-results').classList.add('hidden');
         document.getElementById('pack-section').classList.add('hidden');
@@ -921,6 +955,9 @@
         resetForm();
         document.getElementById('modal-title').textContent = 'Editar cita';
         document.getElementById('apt-id').value = apt.id;
+        // En edición la cita ya tiene paciente: ocultar el botón de paciente nuevo.
+        const npToggleBtn = document.getElementById('toggle-new-patient');
+        if (npToggleBtn) npToggleBtn.classList.add('hidden');
         document.getElementById('recurrence-section').classList.add('hidden');
         document.getElementById('action-buttons-row').classList.remove('hidden');
         document.getElementById('btn-cancel-apt').classList.remove('hidden');
@@ -936,6 +973,16 @@
         document.getElementById('patient-search').value = apt.patient_name;
         document.getElementById('patient-search').readOnly = true;
         document.getElementById('apt-patient').value = apt.patient_id;
+        // Aviso de paciente sin ficha completa: enlace directo a completar su ficha.
+        const apnote = document.getElementById('apt-provisional-note');
+        if (apnote) {
+            if (apt.patient_provisional) {
+                document.getElementById('apt-complete-file-btn').href = `/patients/${apt.patient_id}/edit`;
+                apnote.classList.remove('hidden');
+            } else {
+                apnote.classList.add('hidden');
+            }
+        }
 
         document.getElementById('apt-physio').value = apt.physio_id;
         document.getElementById('apt-duration').value = apt.duration_minutes;
@@ -1094,7 +1141,7 @@
         const q = e.target.value.trim();
         if (q.length < 2) { patientResults.classList.add('hidden'); return; }
         patientSearchTimeout = setTimeout(async () => {
-            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=8`);
+            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=100`);
             const data = await res.json();
             if (data.patients.length === 0) {
                 patientResults.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">Sin resultados</div>';
@@ -1118,6 +1165,63 @@
     document.addEventListener('click', (e) => {
         if (!patientSearch.contains(e.target) && !patientResults.contains(e.target)) {
             patientResults.classList.add('hidden');
+        }
+    });
+
+    // --- Paciente nuevo sin ficha (provisional) ---
+    function toggleNewPatient() {
+        const box = document.getElementById('new-patient-box');
+        const willShow = box.classList.contains('hidden');
+        box.classList.toggle('hidden', !willShow);
+        const toggle = document.getElementById('toggle-new-patient');
+        if (willShow) {
+            // Limpiar campos y la selección previa de paciente existente.
+            ['np-first-name', 'np-last-name', 'np-phone', 'np-email'].forEach(id => document.getElementById(id).value = '');
+            aptPatient.value = '';
+            patientSearch.value = '';
+            patientResults.classList.add('hidden');
+            toggle.textContent = 'Cancelar paciente nuevo';
+        } else {
+            toggle.textContent = '+ Paciente nuevo (sin ficha)';
+        }
+    }
+
+    // ¿Está abierto el mini-formulario de paciente nuevo?
+    function isNewPatientOpen() {
+        const box = document.getElementById('new-patient-box');
+        return box && !box.classList.contains('hidden');
+    }
+
+    // Crea el paciente provisional a partir del mini-formulario y devuelve su id.
+    // Devuelve null si hay error de validación o del servidor (ya muestra el aviso).
+    async function createProvisionalPatientAndGetId() {
+        const firstName = document.getElementById('np-first-name').value.trim();
+        const lastName = document.getElementById('np-last-name').value.trim();
+        const phone = document.getElementById('np-phone').value.trim();
+        const email = document.getElementById('np-email').value.trim();
+        if (!firstName || !lastName) { showToast('Indica nombre y apellidos del paciente nuevo', 'error'); return null; }
+        if (!phone) { showToast('Indica el teléfono del paciente nuevo', 'error'); return null; }
+
+        const res = await authFetch('/api/patients/provisional', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ first_name: firstName, last_name: lastName, phone, email: email || null }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || 'Error al crear el paciente', 'error');
+            return null;
+        }
+        const data = await res.json();
+        return data.id;
+    }
+
+    // Al seleccionar un paciente existente, cerrar el mini-formulario de nuevo paciente.
+    patientResults.addEventListener('click', () => {
+        const box = document.getElementById('new-patient-box');
+        if (!box.classList.contains('hidden')) {
+            box.classList.add('hidden');
+            document.getElementById('toggle-new-patient').textContent = '+ Paciente nuevo (sin ficha)';
         }
     });
 
@@ -1486,10 +1590,18 @@
         errorEl.classList.add('hidden');
 
         const id = document.getElementById('apt-id').value;
-        const patientId = document.getElementById('apt-patient').value;
+        let patientId = document.getElementById('apt-patient').value;
         const physioId = document.getElementById('apt-physio').value;
         const startTime = document.getElementById('apt-start').value;
         const duration = parseInt(document.getElementById('apt-duration').value);
+
+        // Si se está dando de alta un paciente nuevo sin ficha, crearlo ahora y usar su id.
+        if (!id && !patientId && isNewPatientOpen()) {
+            const newId = await createProvisionalPatientAndGetId();
+            if (!newId) return;  // validación/creación fallida: el aviso ya se mostró
+            patientId = String(newId);
+            document.getElementById('apt-patient').value = patientId;
+        }
 
         // Comprobar fecha pasada solo en creación
         if (!id && !skipPastDateCheck) {
@@ -1703,7 +1815,7 @@
         const q = e.target.value.trim();
         if (q.length < 2) { wlResults.classList.add('hidden'); return; }
         wlSearchTimeout = setTimeout(async () => {
-            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=8`);
+            const res = await authFetch(`/api/patients?q=${encodeURIComponent(q)}&size=100`);
             const data = await res.json();
             wlResults.innerHTML = data.patients.length === 0
                 ? '<div class="px-3 py-2 text-sm text-gray-400">Sin resultados</div>'

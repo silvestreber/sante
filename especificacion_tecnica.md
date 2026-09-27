@@ -127,7 +127,8 @@ sante/
 | allergies | Text nullable | Alergias y contraindicaciones (campo destacado) |
 | consent_signed | Boolean | Si firmó consentimiento informado |
 | consent_date | Date nullable | Fecha de firma |
-| notes | Text nullable | Notas generales |
+| notes | Text nullable | Notas generales del paciente (editable en el formulario, visible en la ficha) |
+| is_provisional | Boolean | Paciente "sin ficha": creado con datos mínimos para una cita. Pasa a False al completar la ficha (migración 0007) |
 | created_at | DateTime | |
 
 ### PatientDocument (documentos adjuntos)
@@ -154,17 +155,16 @@ sante/
 | recurrence_group | String nullable | ID para agrupar citas recurrentes |
 | created_by | FK User | Quién creó la cita |
 
-### Session (registro de cada sesión clínica)
+### ClinicalSession (registro de cada sesión clínica)
 | Campo | Tipo | Notas |
 |-------|------|-------|
 | id | Integer PK | |
 | patient_id | FK Patient | |
-| appointment_id | FK Appointment nullable | |
-| physio_id | FK User | |
-| date | DateTime | |
-| techniques | Text | Técnicas aplicadas |
-| observations | Text nullable | |
-| evolution | Text nullable | Evolución del paciente |
+| appointment_id | FK Appointment nullable | Nulo en sesiones manuales (sin cita). Relajado a nullable en migración 0008 |
+| physio_id | FK User nullable | Opcional en sesiones manuales. Relajado a nullable en migración 0008 |
+| date | DateTime | Fecha/hora de la sesión (la de la cita, o la indicada a mano) |
+| observations | Text nullable | Seguimiento de la sesión |
+| is_manual | Boolean | True si la sesión se añadió a mano al historial (sin cita). No permite justificante de asistencia (migración 0008) |
 
 ### ClinicalReport (informes clínicos)
 | Campo | Tipo | Notas |
@@ -437,6 +437,20 @@ sante/
 - SQLAlchemy con `declarative_base()`.
 - `create_all()` al arrancar para crear tablas.
 - Dependencia `get_db()` con yield para gestionar sesiones.
+- Función SQL personalizada `unaccent` registrada en cada conexión SQLite (en `database.py`), que elimina tildes/diacríticos. Se usa en la búsqueda de pacientes para que sea insensible a acentos.
+
+### Migraciones de base de datos
+- Sistema de migraciones ligeras propio en `migrations/` (sin Alembic), ejecutado por `python -m migrations.runner`.
+- Cada migración es un módulo `migrations/versions/NNNN_*.py` con una función `upgrade(connection)` idempotente y no destructiva.
+- El runner registra las aplicadas en la tabla `schema_migrations`, así que ejecutarlo varias veces es seguro.
+- El despliegue (`deploy.sh`) ejecuta el runner tras hacer backup de la BD. `init_db()` solo crea tablas nuevas; **no** aplica migraciones de columnas.
+- Migraciones relevantes recientes:
+  - `0007_paciente_provisional`: añade `patients.is_provisional`.
+  - `0008_sesion_manual`: añade `clinical_sessions.is_manual` y relaja el NOT NULL de `appointment_id` y `physio_id` (reconstruye la tabla conservando los datos).
+
+### Búsqueda de pacientes
+- El listado (`GET /api/patients?q=...`) hace búsqueda flexible: divide el término en palabras y exige que todas aparezcan (en cualquier orden) en el nombre completo (nombre + apellidos) o el teléfono.
+- Insensible a mayúsculas/minúsculas (`ilike`) y a tildes (comparación sobre `unaccent(...)`).
 
 ### Rendimiento (Raspberry Pi)
 - Caché en memoria para endpoints frecuentes (TTL 3-5 segundos).

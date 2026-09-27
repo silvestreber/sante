@@ -6,20 +6,27 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
 
 from app.auth import get_current_user, require_role
 from app.audit_log import log_action
-from app.db.database import get_db
+from app.db.database import get_db, _strip_accents
 from app.db.models import Invoice, Patient, PatientDocument, User, UserRole
 from app.email_service import send_email_with_attachment
 from app.storage import abs_path, get_patient_docs_path, unique_name
 
 
 class DocEmailRequest(BaseModel):
+    email: str | None = None
+
+
+class ProvisionalPatientCreate(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str
     email: str | None = None
 
 
@@ -56,14 +63,20 @@ def list_patients(
     if pending:
         query = query.join(Invoice, Invoice.patient_id == Patient.id).filter(Invoice.is_paid == False).distinct()
     if search:
-        term = f"%{search}%"
-        query = query.filter(
-            or_(
-                Patient.first_name.ilike(term),
-                Patient.last_name.ilike(term),
-                Patient.phone.ilike(term),
+        # Búsqueda flexible: cada palabra del texto debe aparecer (en cualquier orden)
+        # en el nombre completo (nombre + apellidos) o en el teléfono. Insensible a
+        # mayúsculas/minúsculas Y a tildes (se comparan versiones sin acentos con la
+        # función SQL `unaccent`). Así "perez castilla" encuentra a "Pérez Castilla".
+        full_name = Patient.first_name + " " + Patient.last_name
+        full_name_norm = func.unaccent(full_name)
+        for word in search.split():
+            like = f"%{_strip_accents(word)}%"
+            query = query.filter(
+                or_(
+                    full_name_norm.ilike(like),
+                    Patient.phone.ilike(like),
+                )
             )
-        )
     total = query.count()
     patients = query.order_by(Patient.last_name, Patient.first_name).offset((page - 1) * size).limit(size).all()
     return {
@@ -76,6 +89,7 @@ def list_patients(
                 "email": p.email,
                 "allergies": p.allergies,
                 "is_active": p.is_active,
+                "is_provisional": bool(p.is_provisional),
             }
             for p in patients
         ],
@@ -123,6 +137,33 @@ def create_patient(
     return {"id": patient.id, "message": "Paciente creado"}
 
 
+@router.post("/provisional", status_code=201)
+def create_provisional_patient(
+    data: ProvisionalPatientCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crea un paciente 'sin registrar' con datos mínimos (nombre, tel, email) para
+    poder darle una cita. Su ficha clínica se completa más tarde (Completar ficha)."""
+    if not data.first_name.strip() or not data.last_name.strip():
+        raise HTTPException(status_code=400, detail="Nombre y apellidos son obligatorios")
+    if not data.phone.strip():
+        raise HTTPException(status_code=400, detail="El teléfono es obligatorio")
+
+    patient = Patient(
+        first_name=data.first_name.strip(),
+        last_name=data.last_name.strip(),
+        phone=data.phone.strip(),
+        email=data.email.strip() if data.email else None,
+        is_provisional=True,
+    )
+    db.add(patient)
+    db.commit()
+    db.refresh(patient)
+    log_action(db, current_user.id, "CREAR", "PACIENTE_PROVISIONAL", patient.id, f"{patient.first_name} {patient.last_name}")
+    return {"id": patient.id, "message": "Paciente provisional creado"}
+
+
 @router.get("/{patient_id}")
 def get_patient(
     patient_id: int,
@@ -146,6 +187,7 @@ def get_patient(
         "motivo_consulta": patient.motivo_consulta,
         "anamnesis": patient.anamnesis,
         "tratamiento_contraindicaciones": patient.tratamiento_contraindicaciones,
+        "is_provisional": bool(patient.is_provisional),
         "created_at": patient.created_at.isoformat() if patient.created_at else None,
         "documents": [
             {"id": d.id, "filename": d.filename, "description": d.description, "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None}
@@ -188,6 +230,8 @@ def update_patient(
     patient.motivo_consulta = motivo_consulta.strip() if motivo_consulta else None
     patient.anamnesis = anamnesis.strip() if anamnesis else None
     patient.tratamiento_contraindicaciones = tratamiento_contraindicaciones.strip() if tratamiento_contraindicaciones else None
+    # Guardar la ficha completa deja de ser provisional.
+    patient.is_provisional = False
 
     db.commit()
     log_action(db, current_user.id, "EDITAR", "PACIENTE", patient.id, f"{patient.first_name} {patient.last_name}")

@@ -44,11 +44,6 @@ def calendar_page(request: Request):
     return templates.TemplateResponse(request, "appointments/calendar.html")
 
 
-@router.get("/patients/{patient_id}/clinical", response_class=HTMLResponse)
-def clinical_history_page(request: Request, patient_id: int):
-    return templates.TemplateResponse(request, "clinical/history.html")
-
-
 @router.get("/patients/{patient_id}/documents", response_class=HTMLResponse)
 def patient_documents_page(request: Request, patient_id: int):
     return templates.TemplateResponse(request, "patients/documents.html")

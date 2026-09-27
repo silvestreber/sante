@@ -27,6 +27,13 @@ class SessionUpdate(BaseModel):
     observations: str | None = None
 
 
+class ManualSessionCreate(BaseModel):
+    patient_id: int
+    date: datetime  # fecha/hora de la sesión (ISO). Puede ser pasada.
+    observations: str | None = None
+    physio_id: int | None = None  # opcional; si no se indica, el usuario actual
+
+
 @router.get("/patient/{patient_id}")
 def get_patient_history(
     patient_id: int,
@@ -60,9 +67,43 @@ def get_patient_history(
             "is_paid": invoice.is_paid if invoice else False,
             "invoice_id": invoice.id if invoice else None,
             "duration_minutes": appointment.duration_minutes if appointment else None,
+            "is_manual": bool(s.is_manual),
         })
 
     return {"sessions": result}
+
+
+@router.post("/sessions/manual", status_code=201)
+def create_manual_session(
+    data: ManualSessionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Registra en el historial una sesión anterior o externa a la clínica, sin cita
+    asociada. Útil para incorporar sesiones no registradas en el sistema."""
+    patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    physio_id = data.physio_id if data.physio_id is not None else current_user.id
+    if data.physio_id is not None:
+        physio = db.query(User).filter(User.id == data.physio_id).first()
+        if not physio:
+            raise HTTPException(status_code=404, detail="Fisioterapeuta no encontrado")
+
+    session = ClinicalSession(
+        patient_id=data.patient_id,
+        appointment_id=None,
+        physio_id=physio_id,
+        observations=data.observations,
+        date=data.date,
+        is_manual=True,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    log_action(db, current_user.id, "CREAR", "SESION_MANUAL", session.id, f"Paciente {data.patient_id}")
+    return {"id": session.id, "message": "Sesion manual registrada"}
 
 
 @router.post("/sessions", status_code=201)

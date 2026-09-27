@@ -16,12 +16,15 @@ Documento de referencia de todo lo que hace la aplicación. Actualizado al estad
 ### Pacientes
 
 - Registrar un nuevo paciente mediante un formulario con sus datos personales (nombre, apellidos, teléfono, email, dirección, fecha de nacimiento, DNI/NIE, notas).
-- Ver la lista completa de pacientes, con búsqueda por nombre, apellidos o teléfono.
+- Ver la lista completa de pacientes, con **búsqueda flexible** por nombre, apellidos o teléfono: se puede escribir cualquier combinación de palabras en cualquier orden (por ejemplo "Pérez Castilla", "Francisco Castilla" o solo "isco") y encontrará al paciente. La búsqueda **no distingue mayúsculas/minúsculas ni tildes** (buscar "perez" encuentra "Pérez").
+- **Pacientes sin ficha (provisionales):** un paciente nuevo puede darse de alta con datos mínimos (nombre, apellidos, teléfono y email opcional) directamente al crear una cita, sin necesidad de rellenar la ficha completa. Estos pacientes se marcan como "sin ficha" y su ficha clínica se completa más adelante, cuando acuden a la consulta (ver "Completar ficha").
+- **Notas del paciente:** la ficha incluye un campo de notas libres para anotaciones generales sobre el paciente, editable desde el formulario y visible en la ficha.
 - Desactivar pacientes (borrado lógico): el paciente deja de aparecer en la lista pero se conservan todos sus datos, historial, citas y facturas. Solo disponible para admin y recepción.
 - Ver pacientes no activos mediante un toggle en la lista, desde donde se pueden reactivar.
 - La ficha del paciente se divide en dos vistas con un **toggle "Ficha / Historial"** en la parte superior:
-  - **Ficha:** datos del paciente, alergias/contraindicaciones destacadas (si las hay), resumen del bono activo y botón "Editar".
+  - **Ficha:** datos del paciente (incluidas las notas), alergias/contraindicaciones destacadas (si las hay), resumen del bono activo y botón "Editar".
   - **Historial:** historial clínico de sesiones (ver más abajo).
+- **Completar ficha:** si el paciente es provisional (dado de alta solo para una cita), la ficha muestra un aviso con un botón "Completar ficha" que abre el formulario para rellenar sus datos clínicos. Al guardar la ficha completa, el paciente deja de ser provisional. Este mismo aviso aparece también en la cita del calendario.
 - En la cabecera de la ficha hay **botones directos** de acceso a: Tratamientos, Pagos y Documentos (más el botón "Volver").
 - Si el paciente tiene algún pago pendiente, aparece un **icono de aviso rojo junto a su nombre**. El aviso se actualiza en el momento al registrar un pago, sin recargar la página.
 - Adjuntar documentos a la ficha del paciente (radiografías, informes externos, fotos de evolución, etc.), con descripción obligatoria. Se pueden ver directamente en el navegador. Accesible desde el botón "Documentos".
@@ -43,7 +46,8 @@ Documento de referencia de todo lo que hace la aplicación. Actualizado al estad
 
 El modal de cita funciona así:
 
-- **Paciente:** buscador con autocompletado.
+- **Paciente:** buscador con autocompletado (búsqueda flexible por nombre/apellidos/teléfono, sin distinguir mayúsculas ni tildes; muestra todos los resultados con scroll si hay muchos).
+  - **Paciente nuevo (sin ficha):** junto al buscador hay un botón que despliega un mini-formulario (nombre, apellidos, teléfono y email opcional). Al guardar la cita, el paciente provisional se crea automáticamente y queda asignado a la cita, sin pasos adicionales.
 - **Fisioterapeuta:** si el usuario es fisio, se preselecciona a sí mismo.
 - **Día:** selector de fecha.
 - **Hora:** al elegir día y fisioterapeuta, aparece un desplegable con **las horas disponibles** de ese fisio para ese día. Las horas se calculan automáticamente a partir del horario del fisio (mañana y tarde, respetando la pausa del mediodía) en intervalos según la **duración configurada**. Las horas ya ocupadas aparecen deshabilitadas y marcadas como "(ocupada)". Si se cambia el fisioterapeuta, el desplegable se recalcula con su agenda.
@@ -117,6 +121,7 @@ Al finalizar una cita se abre un modal con:
 - Crear tratamientos con ejercicios o recomendaciones para el paciente, y generarlos en PDF.
 - Enviar documentos por email al paciente (facturas, justificantes, ejercicios, consentimientos, etc.).
 - **Todos los PDF generados por la aplicación** (facturas, justificantes, tratamientos, justificante de asistencia) llevan el logo de la clínica como marca de agua tenue de fondo.
+- Además, estos documentos incluyen un **pie de página institucional** con el logo de la clínica y los datos del centro (colegiada y nº de colegiado, dirección, teléfono, email y NICA).
 
 ### Consentimientos informados
 
@@ -184,8 +189,9 @@ Cualquier usuario con el atributo `is_physio` activado puede acceder a estas fun
 - Ver el historial de sesiones del paciente en tabla (fecha, seguimiento, estado de pago), dentro de la pestaña "Historial" de la ficha.
 - Ordenar por fecha ascendente o descendente (por defecto, las más recientes primero) y buscar por fecha u observaciones.
 - Cada fila abre el detalle de la sesión. Las sesiones con pago pendiente muestran un enlace "Pendiente" para registrar el cobro. El pago con bono se muestra como tal.
-- Las sesiones se registran exclusivamente al finalizar una cita desde el calendario. La fecha de la sesión es la de la cita. Cualquier rol puede finalizar citas.
-- Desde cada sesión se puede editar el seguimiento, y generar o enviar por email el justificante de asistencia.
+- Las sesiones se registran normalmente al finalizar una cita desde el calendario. La fecha de la sesión es la de la cita. Cualquier rol puede finalizar citas.
+- **Añadir sesión manualmente:** en la cabecera del historial hay un botón "Añadir sesión" para registrar sesiones anteriores o realizadas fuera de la clínica (sin cita asociada). Se indica fecha, hora, fisioterapeuta (opcional) y seguimiento. Estas sesiones se marcan con una etiqueta "Manual", no tienen estado de pago ni generan cobro.
+- Desde cada sesión se puede editar el seguimiento, y generar o enviar por email el justificante de asistencia. **Las sesiones manuales no permiten justificante de asistencia** (no se realizaron en la clínica): esos botones no aparecen y el servidor también lo impide.
 
 ---
 

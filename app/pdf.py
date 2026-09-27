@@ -41,6 +41,8 @@ CLINIC_CIF = os.getenv("CLINIC_CIF", "")
 
 # Logo usado como marca de agua (mismo que la app).
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "static", "img", "logo_azul.png")
+# Logo (gris) usado en el pie de página institucional.
+FOOTER_LOGO_PATH = os.path.join(os.path.dirname(__file__), "static", "img", "logo_footer.png")
 
 
 def _make_watermark(opacity: float = 0.06) -> str | None:
@@ -101,10 +103,37 @@ class SantePDF(FPDF):
         self.ln(4)
 
     def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 7)
-        self.set_text_color(128)
-        self.cell(0, 10, f"{CLINIC_NAME} - {CLINIC_ADDRESS}", align="C")
+        # Pie de página institucional: logo de la clínica a la izquierda y datos
+        # de la colegiada/centro a la derecha, separados por una línea superior.
+        # Mismo contenido que el pie de las plantillas Word de consentimiento.
+        self.set_y(-28)
+        self.set_draw_color(150, 150, 150)
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+        self.ln(2)
+
+        # Logo a la izquierda (si existe).
+        logo_h = 18  # mm
+        top_y = self.get_y()
+        if os.path.exists(FOOTER_LOGO_PATH):
+            try:
+                self.image(FOOTER_LOGO_PATH, x=self.l_margin, y=top_y, h=logo_h)
+            except Exception:
+                pass
+
+        # Bloque de texto a la derecha del logo.
+        text_x = self.l_margin + 28
+        self.set_xy(text_x, top_y)
+        self.set_font("Helvetica", "B", 7)
+        self.set_text_color(90, 90, 90)
+        self.cell(0, 3.5, "Mar\u00eda Eugenia Romero Castilla - N\u00ba de Colegiado: 7559",
+                  new_x="LMARGIN", new_y="NEXT")
+        self.set_x(text_x)
+        self.set_font("Helvetica", "", 7)
+        self.cell(0, 3.5, "Valle de la Fuente, 25 - 21600 Valverde del Camino - Huelva",
+                  new_x="LMARGIN", new_y="NEXT")
+        self.set_x(text_x)
+        self.cell(0, 3.5, "Tel: 636554300 - Email: info@centrosante.es", new_x="RIGHT", new_y="LAST")
+        self.cell(0, 3.5, "NICA: 59903", align="R", new_x="LMARGIN", new_y="NEXT")
 
 
 def generate_invoice_pdf(invoice_data: dict) -> str:

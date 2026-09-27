@@ -381,6 +381,20 @@ def _physio_signature(db: Session, physio_id: int | None) -> str | None:
     return physio.signature if physio else None
 
 
+def _reject_if_manual_session(db: Session, session_id: int | None):
+    """Impide emitir justificante de asistencia para sesiones registradas
+    manualmente (no se realizaron en la clínica)."""
+    if session_id is None:
+        return
+    from app.db.models import ClinicalSession
+    session = db.query(ClinicalSession).filter(ClinicalSession.id == session_id).first()
+    if session and session.is_manual:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede emitir justificante de asistencia para una sesión manual (no realizada en la clínica).",
+        )
+
+
 @router.get("/attendance/{patient_id}/pdf")
 def download_attendance_pdf(
     patient_id: int,
@@ -389,6 +403,7 @@ def download_attendance_pdf(
     duration: int | None = None,
     physio_name: str | None = None,
     physio_id: int | None = None,
+    session_id: int | None = None,
     token: str | None = None,
     db: Session = Depends(get_db),
 ):
@@ -401,6 +416,8 @@ def download_attendance_pdf(
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    _reject_if_manual_session(db, session_id)
 
     data = {
         "patient_name": f"{patient.first_name} {patient.last_name}",
@@ -429,12 +446,15 @@ def email_attendance(
     duration: int | None = None,
     physio_name: str | None = None,
     physio_id: int | None = None,
+    session_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    _reject_if_manual_session(db, session_id)
 
     to_email = body.email or patient.email
     if not to_email:

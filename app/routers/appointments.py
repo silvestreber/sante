@@ -131,6 +131,7 @@ def appointment_to_dict(apt: Appointment, db: Session = None):
         "id": apt.id,
         "patient_id": apt.patient_id,
         "patient_name": f"{apt.patient.first_name} {apt.patient.last_name}" if apt.patient else "",
+        "patient_provisional": bool(apt.patient.is_provisional) if apt.patient else False,
         "physio_id": apt.physio_id,
         "physio_name": apt.physio.full_name if apt.physio else "",
         "start_time": apt.start_time.isoformat(),

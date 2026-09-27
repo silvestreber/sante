@@ -111,6 +111,14 @@
             </div>
         </fieldset>
 
+        <!-- Notas -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+            <textarea name="notes" rows="3"
+                class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-sante-primary"
+                placeholder="Anotaciones generales sobre el paciente"></textarea>
+        </div>
+
         <div class="flex gap-3 pt-2">
             <button type="submit" class="bg-sante-primary text-white px-5 py-2 rounded hover:bg-sante-primary/90 text-sm">Guardar</button>
             <a href="/patients" class="px-5 py-2 rounded border-2 border-sante-primary/40 text-gray-600 hover:bg-gray-50 text-sm">Cancelar</a>
@@ -139,14 +147,28 @@
         profesion: 'Profesión',
     };
 
+    // Mapa etiqueta -> key para resolver cada línea "Etiqueta: valor".
+    const LABEL_TO_KEY = Object.fromEntries(
+        ANAMNESIS_KEYS.map(k => [ANAMNESIS_LABELS[k].toLowerCase(), k])
+    );
+
     function parseAnamnesis(text) {
         const result = {};
         if (!text) return result;
-        for (const key of ANAMNESIS_KEYS) {
-            const label = ANAMNESIS_LABELS[key];
-            const re = new RegExp(label + ':\\s*([^\\n]*)', 'i');
-            const m = text.match(re);
-            result[key] = m ? m[1].trim() : '';
+        // Parseo línea a línea: cada línea es "Etiqueta: valor". Sólo aceptamos el
+        // valor si la etiqueta coincide EXACTAMENTE con una conocida; así un valor
+        // vacío no arrastra la etiqueta de la línea siguiente.
+        for (const rawLine of text.split(/\r?\n/)) {
+            const idx = rawLine.indexOf(':');
+            if (idx === -1) continue;
+            const label = rawLine.slice(0, idx).trim().toLowerCase();
+            const key = LABEL_TO_KEY[label];
+            if (!key) continue;  // etiqueta desconocida: ignorar
+            let value = rawLine.slice(idx + 1).trim();
+            // Si el "valor" es en realidad otra etiqueta conocida, tratarlo como vacío
+            // (limpia datos antiguos corruptos donde el valor era la etiqueta siguiente).
+            if (LABEL_TO_KEY[value.replace(/:$/, '').trim().toLowerCase()]) value = '';
+            result[key] = value;
         }
         return result;
     }
@@ -158,13 +180,21 @@
     }
 
     function parseTratamiento(text) {
-        if (!text) return { tratamiento: '', contraindicaciones: '' };
-        const mT = text.match(/Tratamiento:\s*([^\n]*(?:\n(?!Contraindicaciones:)[^\n]*)*)/i);
-        const mC = text.match(/Contraindicaciones:\s*([\s\S]*)/i);
-        return {
-            tratamiento: mT ? mT[1].trim() : '',
-            contraindicaciones: mC ? mC[1].trim() : '',
-        };
+        const out = { tratamiento: '', contraindicaciones: '' };
+        if (!text) return out;
+        // Normalizar saltos de línea y separar por las dos etiquetas conocidas.
+        const norm = text.replace(/\r\n/g, '\n');
+        const mT = norm.match(/Tratamiento:\s*([\s\S]*?)(?:\n?Contraindicaciones:|$)/i);
+        const mC = norm.match(/Contraindicaciones:\s*([\s\S]*)$/i);
+        let t = mT ? mT[1].trim() : '';
+        let c = mC ? mC[1].trim() : '';
+        // Limpiar datos antiguos corruptos donde el valor era una etiqueta (la
+        // siguiente o incluso la propia repetida).
+        if (/^(contraindicaciones|tratamiento):?$/i.test(t)) t = '';
+        if (/^(contraindicaciones|tratamiento):?$/i.test(c)) c = '';
+        out.tratamiento = t;
+        out.contraindicaciones = c;
+        return out;
     }
 
     function buildTratamiento(form) {
@@ -191,6 +221,7 @@
                 form.birth_date.value = p.birth_date || '';
                 form.dni.value = p.dni || '';
                 form.motivo_consulta.value = p.motivo_consulta || '';
+                form.notes.value = p.notes || '';
 
                 const anamnesis = parseAnamnesis(p.anamnesis);
                 for (const k of ANAMNESIS_KEYS) {
