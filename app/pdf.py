@@ -1,3 +1,32 @@
+"""Generación de documentos PDF con fpdf2.
+
+Todos los PDFs generados por este módulo usan la clase SantePDF, que extiende
+FPDF añadiendo una cabecera institucional (nombre, NIF, teléfono, dirección de
+la clínica) y un pie de página con el logo y los datos de la colegiada.
+Además, cada página incluye el logo de la clínica como marca de agua tenue.
+
+Funciones públicas:
+    generate_invoice_pdf(invoice_data)    -> PDF de factura/factura simplificada/justificante.
+    generate_consent_pdf(patient_data)    -> PDF de consentimiento informado genérico.
+    generate_treatment_pdf(treatment_data)-> PDF de plan de tratamiento/ejercicios.
+    generate_attendance_pdf(attendance_data) -> PDF de justificante de asistencia
+                                               (incluye firma manuscrita del fisio).
+
+Todas las funciones devuelven la ruta de un fichero temporal que el llamador
+debe mover o eliminar. Los ficheros temporales se crean con tempfile.mktemp.
+
+Variables de entorno usadas:
+    CLINIC_NAME    -> nombre de la clínica.
+    CLINIC_PHONE   -> teléfono de la clínica.
+    CLINIC_ADDRESS -> dirección de la clínica.
+    CLINIC_CIF     -> NIF/CIF de la clínica.
+
+Nota sobre firmas:
+    _decode_signature_to_pngfile() convierte una firma dataURL/base64 a un PNG
+    temporal con transparencia preservada (FPDF soporta canal alfa).
+    _make_watermark() genera una versión muy atenuada del logo para la marca de
+    agua (FPDF no soporta opacidad, se simula mezclando con blanco).
+"""
 import base64
 import io
 import os
@@ -82,6 +111,13 @@ def _get_watermark() -> str | None:
 
 
 class SantePDF(FPDF):
+    """Subclase de FPDF con cabecera y pie de página institucionales de Santé.
+
+    header(): dibuja la marca de agua, el nombre de la clínica, NIF, teléfono
+              y dirección, seguidos de una línea separadora.
+    footer(): dibuja el logo de la clínica a la izquierda y los datos de la
+              colegiada (nombre, número de colegiado, NICA, contacto) a la derecha.
+    """
     def header(self):
         # Marca de agua centrada (mismo logo que la app, muy tenue) detrás del contenido.
         wm = _get_watermark()

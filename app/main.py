@@ -1,3 +1,40 @@
+"""Punto de entrada principal de la aplicación Santé.
+
+Santé es un sistema de gestión para clínicas de fisioterapia. Este módulo
+configura y arranca la aplicación FastAPI, registra todos los routers de la API,
+monta los ficheros estáticos y define los manejadores globales de errores.
+
+Flujo de arranque (lifespan):
+    1. init_db()                  -> crea/migra las tablas de la BD SQLite.
+    2. start_reminder_scheduler() -> lanza el hilo daemon de recordatorios de citas.
+    3. _generate_blank_pdfs_bg()  -> genera en segundo plano los PDFs en blanco de
+                                     las plantillas de consentimiento (puede tardar
+                                     >1 min en Raspberry Pi con LibreOffice).
+
+Routers registrados (prefijo /api/...):
+    auth          -> login, refresh de token, verificación de contraseña.
+    pages         -> vistas HTML (Jinja2) del frontend.
+    patients      -> CRUD de pacientes, documentos y búsqueda.
+    appointments  -> CRUD de citas, recurrencias y validación de horario.
+    clinical      -> historial clínico y sesiones.
+    treatments    -> planes de tratamiento/ejercicios.
+    billing       -> facturas, bonos de sesiones y exportación Excel.
+    documents     -> generación y envío por email de PDFs.
+    finance       -> contabilidad manual (ingresos/gastos).
+    users         -> gestión de usuarios (solo ADMIN).
+    notifications -> avisos internos entre usuarios + WebSocket en tiempo real.
+    audit         -> registro de auditoría de acciones.
+    config        -> configuración de horarios, festivos y rutas de almacenamiento.
+    waitlist      -> lista de espera de pacientes.
+    backup        -> exportación e importación de la base de datos.
+
+Manejadores de error globales:
+    StorageUnavailableError -> HTTP 503: el USB no está montado.
+    Exception               -> HTTP 500: error interno genérico (se loguea en errors.log).
+
+Variables de entorno relevantes:
+    LOG_PATH -> ruta del fichero de log (por defecto app/logs/errors.log).
+"""
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -40,6 +77,12 @@ def _generate_blank_pdfs_bg():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Gestiona el ciclo de vida de la aplicación (arranque y apagado).
+
+    Inicializa la BD, arranca el scheduler de recordatorios y lanza la
+    generación de PDFs en segundo plano. El `yield` separa el código de
+    arranque del de apagado (actualmente vacío).
+    """
     init_db()
     start_reminder_scheduler()
     # Generar PDFs en blanco en un hilo aparte: la app responde de inmediato y la
@@ -75,8 +118,12 @@ from app.storage import StorageUnavailableError
 
 @app.exception_handler(StorageUnavailableError)
 async def storage_unavailable_handler(request: Request, exc: StorageUnavailableError):
-    """El USB no está disponible: no se pudo guardar el fichero. Devolvemos 503
-    con un mensaje claro para el usuario (nada se ha escrito en la SD)."""
+    """HTTP 503: el USB no está montado.
+
+    Se dispara cuando se intenta guardar un fichero (PDF, documento, backup) y
+    el punto de montaje del USB no está activo. Devuelve 503 con mensaje claro.
+    Nada se escribe en la SD por error.
+    """
     logging.error(f"{request.method} {request.url} - StorageUnavailableError: {exc}")
     return JSONResponse(
         status_code=503,
@@ -89,5 +136,10 @@ async def storage_unavailable_handler(request: Request, exc: StorageUnavailableE
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """HTTP 500: manejador global de excepciones no controladas.
+
+    Loguea el error completo (con traceback) en errors.log y devuelve una
+    respuesta genérica al cliente para no exponer detalles internos.
+    """
     logging.error(f"{request.method} {request.url} - {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})

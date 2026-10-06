@@ -1,3 +1,15 @@
+"""Router de autenticación.
+
+Endpoints:
+    POST /api/auth/login           -> autentica usuario y devuelve JWT.
+    POST /api/auth/refresh         -> renueva el token (sesión deslizante).
+    POST /api/auth/verify-password -> verifica la contraseña del usuario actual
+                                      (usado antes de operaciones sensibles como
+                                      exportar/importar backup).
+
+El token JWT tiene una duración de 30 minutos. El frontend debe llamar a
+/refresh periódicamente mientras haya actividad para mantener la sesión viva.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel

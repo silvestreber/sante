@@ -1,3 +1,32 @@
+"""Router de gestión de pacientes.
+
+Endpoints:
+    GET    /api/patients                          -> lista paginada con búsqueda
+                                                     (insensible a tildes y mayúsculas).
+    POST   /api/patients                          -> crea un paciente completo.
+    POST   /api/patients/provisional              -> crea un paciente provisional
+                                                     (solo nombre, teléfono, email)
+                                                     para darle cita sin ficha completa.
+    GET    /api/patients/{id}                     -> detalle de un paciente.
+    PUT    /api/patients/{id}                     -> actualiza la ficha (marca is_provisional=False).
+    PATCH  /api/patients/{id}/deactivate          -> activa/desactiva un paciente.
+    GET    /api/patients/{id}/documents           -> lista todos los documentos del paciente.
+    POST   /api/patients/{id}/documents           -> sube uno o varios ficheros.
+    GET    /api/patients/{id}/documents/{doc}/download -> descarga un documento.
+    GET    /api/patients/{id}/documents/{doc}/view     -> visualiza un documento (requiere token en query).
+    DELETE /api/patients/{id}/documents/{doc}     -> elimina un documento.
+    POST   /api/patients/{id}/documents/{doc}/email -> envía un documento por email.
+    POST   /api/patients/import-excel             -> importa pacientes desde Excel (hoja CLIENTES).
+
+Búsqueda de pacientes:
+    El parámetro `q` divide el texto en palabras y cada una debe aparecer en el
+    nombre completo o teléfono. Usa la función SQL `unaccent` (registrada en
+    database.py) para ignorar tildes.
+
+Pacientes provisionales:
+    is_provisional=True indica que el paciente solo tiene datos mínimos. Al
+    completar la ficha con PUT, is_provisional pasa automáticamente a False.
+"""
 import io
 import os
 import io

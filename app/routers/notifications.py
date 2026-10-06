@@ -1,3 +1,28 @@
+"""Router de notificaciones internas entre usuarios.
+
+Endpoints REST:
+    GET    /api/notifications              -> lista las últimas 50 notificaciones del usuario.
+    GET    /api/notifications/unread-count -> número de notificaciones no leídas.
+    POST   /api/notifications              -> envía una notificación a otro usuario
+                                             (también la entrega por WebSocket en tiempo real).
+    PUT    /api/notifications/{id}/read    -> marca una notificación como leída.
+    PUT    /api/notifications/read-all     -> marca todas como leídas.
+    DELETE /api/notifications/{id}         -> elimina una notificación.
+    GET    /api/notifications/users        -> lista usuarios activos (para el selector de destinatario).
+
+WebSocket:
+    WS /api/notifications/ws?token=<jwt>  -> conexión persistente para recibir
+                                             notificaciones en tiempo real.
+                                             El token JWT se pasa como query param
+                                             (los WebSockets no soportan cabeceras).
+                                             Cierra con código 4001 si el token es inválido.
+
+Flujo de notificación en tiempo real:
+    1. Usuario A llama a POST /api/notifications con recipient_id = B.
+    2. Se crea el registro en BD.
+    3. Se llama a manager.send_to_user(B, {...}) para entregar el mensaje
+       por WebSocket a todas las conexiones activas de B.
+"""
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.orm import Session

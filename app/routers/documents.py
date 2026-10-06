@@ -1,3 +1,35 @@
+"""Router de generación y envío de documentos PDF.
+
+Endpoints de facturas:
+    GET  /api/documents/invoice/{id}/pdf   -> descarga PDF de factura (generado al vuelo).
+    POST /api/documents/invoice/{id}/email -> envía PDF de factura por email.
+
+Endpoints de tratamientos:
+    GET  /api/documents/treatment/{id}/pdf   -> descarga PDF de tratamiento.
+    POST /api/documents/treatment/{id}/email -> envía PDF de tratamiento por email.
+
+Endpoints de consentimientos:
+    GET  /api/documents/consent/{id}/pdf     -> descarga PDF de consentimiento genérico.
+    POST /api/documents/consent/{id}/email   -> envía PDF de consentimiento por email.
+    GET  /api/documents/consent-templates    -> lista plantillas .docx disponibles.
+    GET  /api/documents/consent-template-pdf/{name} -> sirve el PDF en blanco de una plantilla.
+    POST /api/documents/consent-sign/{id}    -> genera un consentimiento firmado (o su
+                                                revocación) a partir de una plantilla .docx
+                                                y lo guarda como documento del paciente.
+
+Endpoints de justificantes de asistencia:
+    GET  /api/documents/attendance/{id}/pdf   -> descarga justificante (requiere token en query).
+    POST /api/documents/attendance/{id}/email -> envía justificante por email.
+
+Nota sobre consentimientos firmados:
+    sign_consent() rellena la plantilla .docx con los datos del paciente y las
+    firmas manuscritas (dataURL PNG), convierte a PDF (LibreOffice en Linux,
+    Word en Windows) y guarda el PDF como PatientDocument. Ver consent_generator.py.
+
+Nota sobre justificantes manuales:
+    No se puede emitir justificante de asistencia para sesiones is_manual=True
+    (_reject_if_manual_session).
+"""
 import os
 import logging
 from datetime import datetime, timedelta, timezone

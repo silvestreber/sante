@@ -1,3 +1,23 @@
+"""Scheduler de recordatorios de citas y backup automático.
+
+Este módulo arranca un hilo daemon en segundo plano que se ejecuta cada hora
+(REMINDER_INTERVAL_SECONDS = 3600) y realiza las siguientes tareas:
+
+    send_appointment_reminders():
+        Busca citas PENDING o CONFIRMED en las próximas 24 horas cuyo
+        reminder_sent sea False y envía un email de recordatorio al paciente.
+        Marca reminder_sent = True para no reenviar.
+
+    auto_backup_db():
+        Copia de seguridad de la BD. El día 1 del mes crea una copia mensual
+        persistente; el resto de días sobreescribe la copia diaria.
+        NOTA: en producción el backup lo gestiona el cron del sistema
+        (backup_db.sh), no este módulo. Ver DESPLIEGUE.md.
+
+Arranque:
+    start_reminder_scheduler() se llama desde main.py en el lifespan de FastAPI.
+    Lanza un threading.Thread(daemon=True) para que el hilo muera con la app.
+"""
 import logging
 import os
 import threading

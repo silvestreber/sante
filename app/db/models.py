@@ -1,3 +1,43 @@
+"""Modelos ORM de la base de datos (SQLAlchemy).
+
+Define todas las tablas de la aplicación y sus relaciones. Cada clase hereda
+de `Base` (declarative_base de SQLAlchemy).
+
+Enumeraciones disponibles:
+    EntryType           -> INCOME / EXPENSE (tipo de apunte contable).
+    DocType             -> INVOICE / SIMPLIFIED_INVOICE / RECEIPT (tipo de documento de cobro).
+    PaymentMethod       -> CASH / BIZUM (método de pago).
+    UserRole            -> ADMIN / RECEPTION / PHYSIO (rol de usuario).
+    AppointmentLocation -> CLINIC / HOME (lugar de la cita).
+    AppointmentStatus   -> PENDING / CONFIRMED / CANCELLED / FINALIZED.
+    WaitlistTimePreference -> ANY / MORNING / AFTERNOON / CUSTOM.
+
+Modelos principales y sus relaciones:
+    User            -> usuarios del sistema (fisios, recepción, admin).
+    Patient         -> pacientes de la clínica.
+    PatientDocument -> documentos adjuntos a un paciente (consentimientos, etc.).
+    Appointment     -> citas (paciente + fisio + fecha/hora).
+    ClinicalSession -> sesiones clínicas del historial del paciente.
+    Treatment       -> planes de tratamiento/ejercicios.
+    Invoice         -> facturas, facturas simplificadas y justificantes de pago.
+    SessionPack     -> bonos de sesiones prepagadas.
+    Notification    -> avisos internos entre usuarios.
+    FinanceEntry    -> apuntes contables manuales (ingresos y gastos).
+    AuditLog        -> registro de auditoría de acciones de usuarios.
+    Schedule        -> horario semanal normal de la clínica.
+    SpecialSchedule -> horarios especiales para periodos concretos.
+    Holiday         -> días festivos (clínica cerrada).
+    Config          -> configuración general clave-valor.
+    PhysioAbsence   -> ausencias y vacaciones de fisioterapeutas.
+    PhysioSchedule  -> horario personal de cada fisioterapeuta.
+    WaitlistEntry   -> entradas de la lista de espera.
+
+Nota sobre rutas de ficheros:
+    PatientDocument.filepath e Invoice.pdf_filename almacenan RUTAS RELATIVAS
+    (solo el nombre del fichero). La ruta absoluta se reconstruye en tiempo de
+    uso combinando la ruta base de la categoría (tabla Config) con el nombre
+    relativo. Ver app/storage.py para los detalles.
+"""
 import enum
 from datetime import datetime, timezone
 
@@ -324,6 +364,26 @@ class PhysioSchedule(Base):
     afternoon_open = Column(String, nullable=True)  # HH:MM
     afternoon_close = Column(String, nullable=True) # HH:MM
     is_off = Column(Boolean, default=False)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class PhysioSpecialSchedule(Base):
+    """Horario especial puntual de un fisioterapeuta (prevalece sobre su horario habitual)."""
+    __tablename__ = "physio_special_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)          # Ej: "Cita médica", "Jornada reducida"
+    date_from = Column(Date, nullable=False)
+    date_to = Column(Date, nullable=False)          # Igual a date_from si es un solo día
+    day_of_week = Column(Integer, nullable=False)   # 0=Lunes, 6=Domingo
+    morning_open = Column(String, nullable=True)    # HH:MM
+    morning_close = Column(String, nullable=True)
+    afternoon_open = Column(String, nullable=True)
+    afternoon_close = Column(String, nullable=True)
+    is_off = Column(Boolean, default=False)         # True = no disponible ese día
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", foreign_keys=[user_id])
 

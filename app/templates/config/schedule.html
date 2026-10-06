@@ -6,21 +6,17 @@
 
 <!-- Tabs -->
 <div class="flex gap-2 mb-6 border-b flex-wrap">
-    <button onclick="showTab('schedule')" id="tab-schedule" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-sante-primary text-sante-primary admin-only">Horario semanal</button>
-    <button onclick="showTab('special')" id="tab-special" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Horarios especiales</button>
-    <button onclick="showTab('holidays')" id="tab-holidays" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Festivos</button>
+    <button onclick="showTab('schedule')" id="tab-schedule" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-sante-primary text-sante-primary admin-only">Horario clínica</button>
     <button onclick="showTab('physio-hours')" id="tab-physio-hours" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Disponibilidad fisios</button>
     <button onclick="showTab('general')" id="tab-general" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">General</button>
-    <button onclick="showTab('import')" id="tab-import" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">Importar datos</button>
-    <button onclick="showTab('export-billing')" id="tab-export-billing" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Exportar gestoría</button>
-    <button onclick="showTab('backup')" id="tab-backup" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Backup</button>
-    <button onclick="showTab('storage')" id="tab-storage" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 admin-only">Almacenamiento</button>
+    <button onclick="showTab('datos')" id="tab-datos" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">Datos</button>
 </div>
 
-<!-- Tab: Horario semanal -->
+<!-- Tab: Horario clínica -->
 <div id="panel-schedule">
+    <h2 class="font-semibold text-gray-700 mb-1">Horario semanal</h2>
     <p class="text-sm text-gray-500 mb-4">Configura el horario de apertura para cada día de la semana. Deja vacío si es jornada continua (sin pausa).</p>
-    <form id="schedule-form" class="space-y-3">
+    <form id="schedule-form" class="space-y-3 mb-8">
         <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-gray-100">
@@ -31,6 +27,7 @@
                         <th class="px-3 py-2">Tarde abre</th>
                         <th class="px-3 py-2">Tarde cierra</th>
                         <th class="px-3 py-2">Cerrado</th>
+                        <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
                 <tbody id="schedule-body"></tbody>
@@ -38,10 +35,10 @@
         </div>
         <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Guardar horario</button>
     </form>
-</div>
 
-<!-- Tab: Horarios especiales -->
-<div id="panel-special" class="hidden">
+    <hr class="my-6">
+
+    <h2 class="font-semibold text-gray-700 mb-1">Horarios especiales</h2>
     <p class="text-sm text-gray-500 mb-4">Horarios que aplican solo durante un periodo concreto (ej: verano, Navidad).</p>
 
     <div id="special-list" class="space-y-3 mb-6"></div>
@@ -73,6 +70,7 @@
                             <th class="px-3 py-2">Tarde abre</th>
                             <th class="px-3 py-2">Tarde cierra</th>
                             <th class="px-3 py-2">Cerrado</th>
+                            <th class="px-3 py-2"></th>
                         </tr>
                     </thead>
                     <tbody id="special-body"></tbody>
@@ -81,10 +79,10 @@
             <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Crear horario especial</button>
         </form>
     </details>
-</div>
 
-<!-- Tab: Festivos -->
-<div id="panel-holidays" class="hidden">
+    <hr class="my-6">
+
+    <h2 class="font-semibold text-gray-700 mb-1">Festivos</h2>
     <p class="text-sm text-gray-500 mb-4">Días en los que la clínica está cerrada. No se podrán asignar citas.</p>
 
     <form id="holiday-form" class="flex flex-col sm:flex-row gap-2 mb-6">
@@ -96,7 +94,29 @@
     <div id="holidays-list" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow divide-y"></div>
 </div>
 
-<!-- Tab: Disponibilidad fisios -->
+<!-- Modal conflictos de horario -->
+<div id="schedule-conflict-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-start gap-3">
+            <svg class="w-6 h-6 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            <div>
+                <h3 class="font-semibold text-gray-800" id="conflict-modal-title">Citas fuera de horario</h3>
+                <p class="text-sm text-gray-500 mt-1" id="conflict-modal-subtitle"></p>
+            </div>
+        </div>
+        <div class="overflow-y-auto flex-1 border border-amber-200 rounded bg-amber-50 divide-y divide-amber-100" id="conflict-modal-list"></div>
+        <p class="text-xs text-gray-500" id="conflict-modal-note">El horario se ha guardado. Estas citas <strong>no han sido modificadas</strong>; revísalas y reagéndalas si es necesario.</p>
+        <div class="flex justify-end gap-2">
+            <a id="conflict-modal-calendar-link" href="/calendar" class="bg-sante-primary text-white px-4 py-2 rounded text-sm font-medium hover:bg-sante-primary/90">Ir al calendario</a>
+            <button onclick="document.getElementById('schedule-conflict-modal').classList.add('hidden')" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cerrar</button>
+        </div>
+        <!-- Footer extra para festivos: confirmar o cancelar antes de guardar -->
+        <div id="conflict-modal-footer" class="hidden flex justify-end gap-2 border-t pt-3">
+            <button onclick="document.getElementById('schedule-conflict-modal').classList.add('hidden'); pendingHolidaySubmit=null;" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300">Cancelar</button>
+            <button onclick="confirmSaveHoliday()" class="bg-amber-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-600">Guardar festivo de todas formas</button>
+        </div>
+    </div>
+</div>
 <div id="panel-physio-hours" class="hidden">
     <div class="mb-4">
         <label class="text-sm text-gray-600">Seleccionar fisioterapeuta</label>
@@ -117,6 +137,7 @@
                         <th class="px-3 py-2">Tarde abre</th>
                         <th class="px-3 py-2">Tarde cierra</th>
                         <th class="px-3 py-2">Libre</th>
+                        <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
                 <tbody id="physio-schedule-body"></tbody>
@@ -124,6 +145,57 @@
         </div>
         <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Guardar horario</button>
     </form>
+
+    <!-- Sub: Horarios especiales del fisio -->
+    <h3 class="font-semibold text-gray-700 mb-2 mt-8">Horarios especiales</h3>
+    <p class="text-sm text-gray-500 mb-3">Periodos puntuales con un horario distinto al habitual (prevalece sobre el horario semanal). Ej: jornada reducida, cita médica, etc.</p>
+
+    <div id="physio-special-list" class="space-y-3 mb-4"></div>
+
+    <details id="physio-special-details" class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4">
+        <summary class="cursor-pointer font-medium text-sante-primary">+ Nuevo horario especial</summary>
+        <form id="physio-special-form" class="mt-4 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="sm:col-span-2">
+                    <label class="text-xs text-gray-500">Nombre / motivo</label>
+                    <input type="text" id="psp-name" required class="w-full border rounded px-3 py-2 text-sm" placeholder="Ej: Cita médica, Jornada reducida...">
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" id="psp-single-day" onchange="togglePspSingleDay()">
+                    <span class="font-medium text-gray-700">Un solo día</span>
+                </label>
+            </div>
+            <div id="psp-date-range" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-gray-500">Desde</label>
+                    <input type="date" id="psp-from" required class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div id="psp-to-col">
+                    <label class="text-xs text-gray-500">Hasta</label>
+                    <input type="date" id="psp-to" required class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Día</th>
+                            <th class="px-3 py-2">Mañana abre</th>
+                            <th class="px-3 py-2">Mañana cierra</th>
+                            <th class="px-3 py-2">Tarde abre</th>
+                            <th class="px-3 py-2">Tarde cierra</th>
+                            <th class="px-3 py-2">No disponible</th>
+                            <th class="px-3 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="physio-special-body"></tbody>
+                </table>
+            </div>
+            <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Guardar horario especial</button>
+        </form>
+    </details>
 
     <!-- Sub: Ausencias y vacaciones -->
     <h3 class="font-semibold text-gray-700 mb-2">Ausencias y vacaciones</h3>
@@ -189,8 +261,9 @@
     </div>
 </div>
 
-<!-- Tab: Importar datos -->
-<div id="panel-import" class="hidden">
+<!-- Tab: Datos -->
+<div id="panel-datos" class="hidden space-y-8">
+
     <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md">
         <h2 class="font-semibold text-gray-700 mb-2">Importar pacientes desde Excel</h2>
         <p class="text-sm text-gray-500 mb-4">Selecciona un archivo Excel con la hoja <strong>CLIENTES</strong>. Los pacientes con teléfono o DNI ya existente se omitirán automáticamente.</p>
@@ -201,11 +274,8 @@
             <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Importar</button>
         </form>
     </div>
-</div>
 
-<!-- Tab: Exportar gestoría -->
-<div id="panel-export-billing" class="hidden">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md admin-only">
         <h2 class="font-semibold text-gray-700 mb-2">Exportar facturación para gestoría</h2>
         <p class="text-sm text-gray-500 mb-4">Genera el Excel de gestoría con los clientes nuevos y las facturas pagadas del periodo seleccionado. El archivo se basa en la plantilla <strong>Eugenia Facturación.xlsx</strong> de la raíz del proyecto.</p>
         <form id="export-billing-form" class="space-y-4">
@@ -225,20 +295,17 @@
             </button>
         </form>
     </div>
-</div>
 
-<!-- Tab: Backup -->
-<div id="panel-backup" class="hidden">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md space-y-6">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 max-w-md space-y-6 admin-only">
         <div>
-            <h2 class="font-semibold text-gray-700 mb-3">Exportar copia de seguridad</h2>
+            <h2 class="font-semibold text-gray-700 mb-3">Copia de seguridad</h2>
             <p class="text-sm text-gray-500 mb-3">Descarga una copia completa de la base de datos.</p>
             <form id="export-form" class="space-y-3">
                 <div>
                     <label class="block text-sm text-gray-600 mb-1">Contraseña</label>
                     <input type="password" id="export-password" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
                 </div>
-                <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Descargar backup</button>
+                <button type="submit" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Descargar copia de seguridad</button>
             </form>
         </div>
         <hr>
@@ -254,7 +321,7 @@
                     <label class="block text-sm text-gray-600 mb-1">Contraseña</label>
                     <input type="password" id="import-password" class="w-full border-2 border-sante-primary/40 rounded px-3 py-2 text-sm" required>
                 </div>
-                <button type="submit" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 text-sm font-medium">Restaurar backup</button>
+                <button type="submit" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 text-sm font-medium">Restaurar copia de seguridad</button>
             </form>
         </div>
         <hr>
@@ -264,13 +331,10 @@
             <button onclick="shutdownSystem()" class="bg-gray-800 text-white px-6 py-2 rounded hover:bg-gray-900 text-sm font-medium">Apagar</button>
         </div>
     </div>
-</div>
 
-<!-- Tab: Almacenamiento -->
-<div id="panel-storage" class="hidden">
-    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 space-y-4">
+    <div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-6 space-y-4 admin-only">
         <div>
-            <h2 class="font-semibold text-gray-700 mb-1">Ubicación de los ficheros</h2>
+            <h2 class="font-semibold text-gray-700 mb-1">Almacenamiento</h2>
             <p class="text-sm text-gray-500">Carpetas donde se guardan los documentos. Los registros de actividad (logs) se guardan siempre en la tarjeta SD y no se configuran aquí.</p>
             <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
                 Al cambiar una ubicación, los ficheros existentes se moverán a la nueva carpeta y hará falta <strong>reiniciar el servicio</strong> para que el cambio surta efecto. El cambio solo se guarda si el traslado se completa sin errores.
@@ -294,7 +358,6 @@
                 <tbody id="storage-body"></tbody>
             </table>
         </div>
-
         <hr>
         <div>
             <h2 class="font-semibold text-gray-700 mb-3">Reiniciar el servicio</h2>
@@ -302,6 +365,7 @@
             <button onclick="restartService()" class="bg-sante-primary text-white px-6 py-2 rounded hover:bg-sante-primary/90 text-sm font-medium">Reiniciar servicio</button>
         </div>
     </div>
+
 </div>
 
 <!-- Modal cambio de ubicación -->
@@ -342,7 +406,7 @@ if (role !== 'ADMIN' && role !== 'RECEPTION') { window.location.href = '/calenda
 // Ocultar tabs exclusivos de admin si es recepción
 if (role !== 'ADMIN') {
     document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
-    showTab('import');
+    showTab('datos');
 }
 
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -357,7 +421,61 @@ function showTab(tab) {
 }
 
 function timeInput(id, value) {
-    return `<input type="time" id="${id}" value="${value || ''}" class="border rounded px-2 py-1 text-sm w-24">`;
+    return `<input type="time" id="${id}" value="${value || ''}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)">`;
+}
+
+// Icono X para limpiar los 4 campos de hora de una fila
+function clearRowBtn(prefix, idx) {
+    return `<button type="button" onclick="clearRow('${prefix}',${idx})" class="text-gray-400 hover:text-red-500" title="Limpiar fila">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>`;
+}
+
+function clearRow(prefix, idx) {
+    ['mo','mc','ao','ac'].forEach(f => {
+        const el = document.getElementById(`${prefix}${f}-${idx}`);
+        if (el) el.value = '';
+    });
+    const errEl = document.getElementById(`${prefix}err-${idx}`);
+    if (errEl) errEl.textContent = '';
+}
+
+// Casos válidos:
+// 1. mo+mc+ao+ac  (mañana y tarde)
+// 2. mo+ac        (jornada continua: mo=abre, ac=cierra)
+// 3. mo+mc        (solo mañana)
+// 4. ao+ac        (solo tarde)
+// 5. todo vacío   (cerrado / sin configurar)
+function validateScheduleRow(prefix, idx) {
+    const mo = (document.getElementById(`${prefix}mo-${idx}`)?.value || '').trim();
+    const mc = (document.getElementById(`${prefix}mc-${idx}`)?.value || '').trim();
+    const ao = (document.getElementById(`${prefix}ao-${idx}`)?.value || '').trim();
+    const ac = (document.getElementById(`${prefix}ac-${idx}`)?.value || '').trim();
+    const errEl = document.getElementById(`${prefix}err-${idx}`);
+
+    const valid =
+        (!mo && !mc && !ao && !ac) ||          // todo vacío
+        (mo && mc && ao && ac) ||              // mañana + tarde
+        (mo && !mc && !ao && ac) ||            // jornada continua
+        (mo && mc && !ao && !ac) ||            // solo mañana
+        (!mo && !mc && ao && ac);              // solo tarde
+
+    if (errEl) errEl.textContent = valid ? '' : 'Combinación no válida. Casos permitidos: mañana+tarde, jornada continua, solo mañana, solo tarde.';
+    return valid;
+}
+
+function validateRow(inputEl) {
+    // Detectar prefix e idx a partir del id del input (ej: "mo-2", "sp-mo-2", "psp-mo-3")
+    const id = inputEl.id;
+    const idx = parseInt(id.split('-').pop());
+    const prefix = id.slice(0, id.lastIndexOf('-', id.lastIndexOf('-') - 1) + 1).replace(/mo$|mc$|ao$|ac$/, '');
+    // Reconstruir prefix limpio: todo antes del campo (mo/mc/ao/ac)
+    const fieldMatch = id.match(/^(.*?)(mo|mc|ao|ac)-(\d+)$/);
+    if (fieldMatch) validateScheduleRow(fieldMatch[1], parseInt(fieldMatch[3]));
+}
+
+function validateAllRows(prefix, indices) {
+    return indices.every(i => validateScheduleRow(prefix, i));
 }
 
 // --- Horario semanal ---
@@ -377,8 +495,38 @@ async function loadSchedule() {
             <td class="px-3 py-2 text-center">${timeInput('ao-'+i, s.afternoon_open)}</td>
             <td class="px-3 py-2 text-center">${timeInput('ac-'+i, s.afternoon_close)}</td>
             <td class="px-3 py-2 text-center"><input type="checkbox" id="cl-${i}" ${s.is_closed ? 'checked' : ''}></td>
-        </tr>`;
+            <td class="px-3 py-2 text-center">${clearRowBtn('', i)}</td>
+        </tr>
+        <tr><td colspan="7" class="px-3 pb-1"><span id="err-${i}" class="text-xs text-red-500"></span></td></tr>`;
     }).join('');
+}
+
+function showConflictModal(appointments, title, subtitle, isPreConfirm, isBlocking) {
+    document.getElementById('conflict-modal-title').textContent = title;
+    document.getElementById('conflict-modal-subtitle').textContent = subtitle;
+    const list = document.getElementById('conflict-modal-list');
+    list.innerHTML = appointments.map(apt => {
+        const dt = new Date(apt.start_time);
+        const formatted = dt.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+            + ' · ' + dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        return `<div class="px-3 py-2 text-sm flex justify-between items-center gap-2">
+            <span class="font-medium text-gray-800">${apt.patient_name}</span>
+            <span class="text-gray-500 text-xs shrink-0">${formatted}</span>
+        </div>`;
+    }).join('');
+    // Modo bloqueante: solo cerrar, sin guardar ni nota de "ya guardado"
+    const isInfo = !isPreConfirm && !isBlocking;
+    document.getElementById('conflict-modal-note').classList.toggle('hidden', !isInfo);
+    document.getElementById('conflict-modal-footer').classList.toggle('hidden', !isPreConfirm);
+    document.getElementById('schedule-conflict-modal').classList.remove('hidden');
+}
+
+async function confirmSaveHoliday() {
+    document.getElementById('schedule-conflict-modal').classList.add('hidden');
+    if (pendingHolidaySubmit) {
+        await saveHoliday(pendingHolidaySubmit);
+        pendingHolidaySubmit = null;
+    }
 }
 
 async function checkAndWarnConflicts(schedules, dateFrom, dateTo) {
@@ -392,10 +540,11 @@ async function checkAndWarnConflicts(schedules, dateFrom, dateTo) {
     if (!res.ok) return;
     const data = await res.json();
     if (data.conflict) {
-        const apt = data.appointment;
-        const dt = new Date(apt.start_time);
-        const formatted = dt.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' a las ' + dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-        showAlert('Aviso: citas fuera de horario', `Hay citas futuras que quedan fuera del nuevo horario configurado.<br><br>Primera cita afectada: <strong>${apt.patient_name}</strong> — ${formatted}.<br><br>Las citas <strong>no han sido modificadas</strong>. Revísalas manualmente si es necesario.`);
+        const n = data.appointments.length;
+        const subtitle = dateFrom
+            ? `${n} cita${n > 1 ? 's' : ''} en el periodo ${formatDate(dateFrom)}–${formatDate(dateTo)} quedan fuera del nuevo horario especial.`
+            : `${n} cita${n > 1 ? 's' : ''} futuras quedan fuera del nuevo horario semanal.`;
+        showConflictModal(data.appointments, 'Citas fuera de horario', subtitle, false);
     }
 }
 
@@ -409,6 +558,7 @@ document.getElementById('schedule-form').addEventListener('submit', async (e) =>
         afternoon_close: document.getElementById('ac-'+i).value || null,
         is_closed: document.getElementById('cl-'+i).checked,
     }));
+    if (!validateAllRows('', DAYS.map((_, i) => i))) return;
     const res = await authFetch('/api/config/schedule', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -424,12 +574,14 @@ document.getElementById('schedule-form').addEventListener('submit', async (e) =>
 function renderSpecialBody(prefix) {
     return DAYS.map((name, i) => `<tr class="border-t">
         <td class="px-3 py-2 font-medium">${name}</td>
-        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}mo-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
-        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}mc-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
-        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}ao-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
-        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}ac-${i}" class="border rounded px-2 py-1 text-sm w-24"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}mo-${i}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}mc-${i}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}ao-${i}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+        <td class="px-3 py-2 text-center"><input type="time" id="${prefix}ac-${i}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
         <td class="px-3 py-2 text-center"><input type="checkbox" id="${prefix}cl-${i}"></td>
-    </tr>`).join('');
+        <td class="px-3 py-2 text-center">${clearRowBtn(prefix, i)}</td>
+    </tr>
+    <tr><td colspan="7" class="px-3 pb-1"><span id="${prefix}err-${i}" class="text-xs text-red-500"></span></td></tr>`).join('');
 }
 
 async function loadSpecials() {
@@ -484,6 +636,7 @@ document.getElementById('special-form').addEventListener('submit', async (e) => 
             schedules,
         }),
     });
+    if (!validateAllRows('sp-', DAYS.map((_, i) => i))) return;
     if (res.ok) {
         e.target.reset();
         loadSpecials();
@@ -521,17 +674,44 @@ async function deleteHoliday(id) {
 
 document.getElementById('holiday-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const dateVal = document.getElementById('hol-date').value;
+    // Comprobar conflictos antes de guardar
+    const checkRes = await authFetch('/api/config/check-holiday-conflicts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateVal }),
+    });
+    if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        if (checkData.conflict) {
+            // Mostrar modal de confirmación con las citas afectadas antes de guardar
+            pendingHolidaySubmit = { date: dateVal, name: document.getElementById('hol-name').value || null };
+            const n = checkData.appointments.length;
+            showConflictModal(
+                checkData.appointments,
+                'Citas en día festivo',
+                `Hay ${n} cita${n > 1 ? 's' : ''} programada${n > 1 ? 's' : ''} en esta fecha. Si añades el festivo quedarán fuera de horario.`,
+                true
+            );
+            // Cambiar el botón Cerrar por Cancelar + Guardar de todas formas
+            document.getElementById('conflict-modal-footer').classList.remove('hidden');
+            return;
+        }
+    }
+    await saveHoliday({ date: dateVal, name: document.getElementById('hol-name').value || null });
+});
+
+let pendingHolidaySubmit = null;
+
+async function saveHoliday(payload) {
     const res = await authFetch('/api/config/holidays', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            date: document.getElementById('hol-date').value,
-            name: document.getElementById('hol-name').value || null,
-        }),
+        body: JSON.stringify(payload),
     });
-    if (res.ok) { e.target.reset(); loadHolidays(); }
+    if (res.ok) { document.getElementById('holiday-form').reset(); loadHolidays(); showToast('Festivo añadido'); }
     else { const err = await res.json(); showToast(err.detail, 'error'); }
-});
+}
 
 // Init
 loadSchedule();
@@ -563,13 +743,16 @@ async function loadPhysioSchedule() {
         const s = map[i] || {};
         return `<tr class="border-t">
             <td class="px-3 py-2 font-medium">${name}</td>
-            <td class="px-3 py-2 text-center"><input type="time" id="ps-mo-${i}" value="${s.morning_open || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
-            <td class="px-3 py-2 text-center"><input type="time" id="ps-mc-${i}" value="${s.morning_close || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
-            <td class="px-3 py-2 text-center"><input type="time" id="ps-ao-${i}" value="${s.afternoon_open || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
-            <td class="px-3 py-2 text-center"><input type="time" id="ps-ac-${i}" value="${s.afternoon_close || ''}" class="border rounded px-2 py-1 text-sm w-24"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-mo-${i}" value="${s.morning_open || ''}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-mc-${i}" value="${s.morning_close || ''}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-ao-${i}" value="${s.afternoon_open || ''}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="ps-ac-${i}" value="${s.afternoon_close || ''}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
             <td class="px-3 py-2 text-center"><input type="checkbox" id="ps-off-${i}" ${s.is_off ? 'checked' : ''}></td>
-        </tr>`;
+            <td class="px-3 py-2 text-center">${clearRowBtn('ps-', i)}</td>
+        </tr>
+        <tr><td colspan="7" class="px-3 pb-1"><span id="ps-err-${i}" class="text-xs text-red-500"></span></td></tr>`;
     }).join('');
+    loadPhysioSpecialSchedules();
 }
 
 document.getElementById('physio-schedule-form').addEventListener('submit', async (e) => {
@@ -584,12 +767,192 @@ document.getElementById('physio-schedule-form').addEventListener('submit', async
         afternoon_close: document.getElementById('ps-ac-'+i).value || null,
         is_off: document.getElementById('ps-off-'+i).checked,
     }));
+    if (!validateAllRows('ps-', DAYS.map((_, i) => i))) return;
     const res = await authFetch('/api/config/physio-schedules', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: parseInt(userId), schedules }),
     });
     if (res.ok) showToast('Horario del fisioterapeuta guardado');
+});
+
+// --- Horarios especiales del fisio ---
+function togglePspSingleDay() {
+    const single = document.getElementById('psp-single-day').checked;
+    document.getElementById('psp-to-col').classList.toggle('hidden', single);
+    document.getElementById('psp-to').required = !single;
+}
+
+function renderPhysioSpecialBody(dateFrom, dateTo) {
+    const single = document.getElementById('psp-single-day').checked;
+    let days;
+    if (single && dateFrom) {
+        const dow = (new Date(dateFrom + 'T00:00:00').getDay() + 6) % 7;
+        days = [{ idx: dow, name: DAYS[dow] }];
+    } else if (dateFrom && dateTo) {
+        // Calcular qué días de la semana caen dentro del rango (sin repetir)
+        const seen = new Set();
+        days = [];
+        const d = new Date(dateFrom + 'T00:00:00');
+        const end = new Date(dateTo + 'T00:00:00');
+        while (d <= end) {
+            const dow = (d.getDay() + 6) % 7;
+            if (!seen.has(dow)) { seen.add(dow); days.push({ idx: dow, name: DAYS[dow] }); }
+            if (seen.size === 7) break; // ya están todos
+            d.setDate(d.getDate() + 1);
+        }
+        days.sort((a, b) => a.idx - b.idx);
+    } else {
+        days = DAYS.map((name, i) => ({ idx: i, name }));
+    }
+    document.getElementById('physio-special-body').innerHTML = days.map(({ idx, name }) =>
+        `<tr class="border-t">
+            <td class="px-3 py-2 font-medium">${name}</td>
+            <td class="px-3 py-2 text-center"><input type="time" id="psp-mo-${idx}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="psp-mc-${idx}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="psp-ao-${idx}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="time" id="psp-ac-${idx}" class="border rounded px-2 py-1 text-sm w-24" oninput="validateRow(this)"></td>
+            <td class="px-3 py-2 text-center"><input type="checkbox" id="psp-off-${idx}"></td>
+            <td class="px-3 py-2 text-center">${clearRowBtn('psp-', idx)}</td>
+        </tr>
+        <tr><td colspan="7" class="px-3 pb-1"><span id="psp-err-${idx}" class="text-xs text-red-500"></span></td></tr>`
+    ).join('');
+}
+
+// Regenerar tabla al cambiar fecha (para modo un solo día)
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('psp-from').addEventListener('change', () => {
+        const from = document.getElementById('psp-from').value;
+        const to = document.getElementById('psp-to').value;
+        renderPhysioSpecialBody(from, to || from);
+    });
+    document.getElementById('psp-to').addEventListener('change', () => {
+        const from = document.getElementById('psp-from').value;
+        const to = document.getElementById('psp-to').value;
+        renderPhysioSpecialBody(from, to);
+    });
+});
+
+async function loadPhysioSpecialSchedules() {
+    const userId = document.getElementById('physio-select').value;
+    const container = document.getElementById('physio-special-list');
+    if (!userId) { container.innerHTML = ''; return; }
+    const res = await authFetch(`/api/config/physio-special-schedules/${userId}`);
+    const data = await res.json();
+    if (data.length === 0) {
+        container.innerHTML = '<p class="text-sm text-gray-400">No hay horarios especiales configurados.</p>';
+        return;
+    }
+    container.innerHTML = data.map(sp => {
+        const isSingle = sp.date_from === sp.date_to;
+        const period = isSingle ? formatDate(sp.date_from) : `${formatDate(sp.date_from)} → ${formatDate(sp.date_to)}`;
+        const daysSummary = sp.schedules.map(s => {
+            const name = DAYS[s.day_of_week];
+            if (s.is_off) return `<span class="text-red-600">${name}: no disponible</span>`;
+            const blocks = [];
+            if (s.morning_open && s.morning_close) blocks.push(`${s.morning_open}-${s.morning_close}`);
+            if (s.afternoon_open && s.afternoon_close) blocks.push(`${s.afternoon_open}-${s.afternoon_close}`);
+            return `<span>${name}: ${blocks.join(', ') || 'sin horario'}</span>`;
+        }).join(' &middot; ');
+        return `<div class="bg-white border-2 border-sante-primary/40 rounded-lg shadow p-4">
+            <div class="flex justify-between items-start gap-2">
+                <div>
+                    <span class="font-medium text-gray-800">${sp.name}</span>
+                    <span class="text-xs text-gray-500 ml-2">${period}</span>
+                    <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-2">${daysSummary}</div>
+                </div>
+                <button onclick="deletePhysioSpecial(${sp.id})" class="text-red-600 text-xs hover:underline shrink-0">Eliminar</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function deletePhysioSpecial(id) {
+    showConfirm('Eliminar horario especial', '¿Eliminar este horario especial del fisioterapeuta?', async () => {
+        await authFetch(`/api/config/physio-special-schedules/${id}`, { method: 'DELETE' });
+        loadPhysioSpecialSchedules();
+        showToast('Horario especial eliminado');
+    });
+}
+
+// Inicializar tabla al cargar la página
+renderPhysioSpecialBody();
+
+document.getElementById('physio-special-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('physio-select').value;
+    if (!userId) { showToast('Selecciona un fisioterapeuta', 'error'); return; }
+    const single = document.getElementById('psp-single-day').checked;
+    const dateFrom = document.getElementById('psp-from').value;
+    const dateTo = single ? dateFrom : document.getElementById('psp-to').value;
+    if (!dateFrom || (!single && !dateTo)) { showToast('Indica las fechas', 'error'); return; }
+
+    // Recoger solo los días visibles en la tabla
+    const rows = document.querySelectorAll('#physio-special-body tr');
+    const schedules = [];
+    const visibleIndices = [];
+    rows.forEach(row => {
+        const firstInput = row.querySelector('input[type="time"]');
+        if (!firstInput) return;
+        const idx = parseInt(firstInput.id.split('-').pop());
+        visibleIndices.push(idx);
+        schedules.push({
+            day_of_week: idx,
+            morning_open: document.getElementById(`psp-mo-${idx}`)?.value || null,
+            morning_close: document.getElementById(`psp-mc-${idx}`)?.value || null,
+            afternoon_open: document.getElementById(`psp-ao-${idx}`)?.value || null,
+            afternoon_close: document.getElementById(`psp-ac-${idx}`)?.value || null,
+            is_off: document.getElementById(`psp-off-${idx}`)?.checked || false,
+        });
+    });
+    if (!validateAllRows('psp-', visibleIndices)) return;
+
+    const payload = {
+        user_id: parseInt(userId),
+        name: document.getElementById('psp-name').value.trim(),
+        date_from: dateFrom,
+        date_to: dateTo,
+        schedules,
+    };
+
+    // Comprobar conflictos primero — si los hay, bloquear el guardado
+    const checkRes = await authFetch('/api/config/physio-special-schedules/check-conflicts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        if (checkData.conflict) {
+            const n = checkData.appointments.length;
+            showConflictModal(
+                checkData.appointments,
+                'No se puede guardar: citas en conflicto',
+                `El fisioterapeuta tiene ${n} cita${n > 1 ? 's' : ''} en este periodo que quedarían fuera de su nuevo horario. Modifica o cancela esas citas antes de guardar el horario especial.`,
+                false,
+                true  // bloqueante: sin botón de guardar
+            );
+            return;
+        }
+    }
+
+    const res = await authFetch('/api/config/physio-special-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+        e.target.reset();
+        document.getElementById('psp-single-day').checked = false;
+        togglePspSingleDay();
+        renderPhysioSpecialBody();
+        loadPhysioSpecialSchedules();
+        document.getElementById('physio-special-details').removeAttribute('open');
+        showToast('Horario especial guardado');
+    } else {
+        const err = await res.json();
+        showToast(err.detail || 'Error', 'error');
+    }
 });
 
 // --- Ausencias ---

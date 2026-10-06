@@ -1,3 +1,21 @@
+"""Router de contabilidad manual (ingresos y gastos).
+
+Permite registrar apuntes contables manuales independientes de las facturas.
+Los ingresos generados automáticamente al cobrar una factura también se
+almacenan aquí (en FinanceEntry), pero se crean/eliminan desde billing.py.
+
+Endpoints (solo ADMIN):
+    GET    /api/finance/entries          -> lista apuntes en un rango de fechas
+                                           (filtro opcional por tipo INCOME/EXPENSE).
+    GET    /api/finance/balance          -> balance del periodo: ingresos, gastos y neto.
+    POST   /api/finance/entries          -> crea un apunte manual.
+    PUT    /api/finance/entries/{id}     -> actualiza un apunte.
+    DELETE /api/finance/entries/{id}     -> elimina un apunte.
+
+Nota: los apuntes vinculados a facturas (invoice_id != None) se crean/eliminan
+automáticamente desde el router de facturación. No deben modificarse manualmente
+para no desincronizar la contabilidad con las facturas.
+"""
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query

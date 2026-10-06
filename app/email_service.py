@@ -1,3 +1,19 @@
+"""Servicio de envío de emails con adjunto.
+
+Envía correos electrónicos con un fichero adjunto (normalmente un PDF) usando
+SMTP con STARTTLS. Se usa para enviar facturas, consentimientos y justificantes
+directamente al email del paciente desde la aplicación.
+
+Variables de entorno requeridas (.env):
+    SMTP_HOST     -> servidor SMTP (por defecto smtp.gmail.com).
+    SMTP_PORT     -> puerto SMTP (por defecto 587).
+    SMTP_USER     -> usuario/email de la cuenta remitente.
+    SMTP_PASSWORD -> contraseña o app-password de la cuenta remitente.
+    SMTP_FROM     -> dirección de email del remitente.
+    CLINIC_NAME   -> nombre de la clínica (aparece como nombre del remitente).
+
+Si SMTP_USER o SMTP_PASSWORD están vacíos, la función lanza ValueError.
+"""
 import os
 import smtplib
 from email.mime.application import MIMEApplication

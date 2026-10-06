@@ -1,3 +1,23 @@
+"""Router de gestión de usuarios del sistema (solo ADMIN).
+
+Endpoints:
+    GET   /api/users          -> lista todos los usuarios.
+    POST  /api/users          -> crea un nuevo usuario.
+    PUT   /api/users/{id}     -> actualiza datos del usuario (nombre, rol, contraseña,
+                                 color de calendario, firma manuscrita).
+    PATCH /api/users/{id}/deactivate -> activa/desactiva un usuario.
+
+Todos los endpoints requieren rol ADMIN.
+
+Firma del fisioterapeuta:
+    El campo `signature` almacena la firma manuscrita como dataURL PNG (base64).
+    Se usa para estamparla en los justificantes de asistencia.
+    Enviar cadena vacía borra la firma existente.
+
+Color del calendario:
+    El campo `color` es un código hex (ej: "#3498db") que el calendario usa para
+    distinguir visualmente las citas de cada fisioterapeuta.
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session

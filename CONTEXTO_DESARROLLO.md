@@ -125,7 +125,49 @@ app/
 
 ## Lo implementado en esta sesión
 
-### 1. CI PUNCION SECA — consentimiento informado
+### 1. Festivos en calendario
+- Color de fondo de festivos cambiado de gris a naranja/ámbar (`#fed7aa`) en vistas semana/día
+- `dayCellDidMount` colorea celdas en vista mes con el nombre del festivo en rojo-naranja
+
+### 2. Validaciones de horario al guardar
+- `check-schedule-conflicts` devuelve lista completa de citas en conflicto (no solo la primera)
+- Nuevo endpoint `check-holiday-conflicts`: citas futuras en fecha festiva
+- Modal de conflictos en `schedule.html` con lista completa de citas afectadas
+- Festivos muestran confirmación antes de guardar; horarios especiales de fisio bloquean el guardado si hay conflictos
+
+### 3. Citas fuera de horario en calendario
+- Campo `out_of_hours` en `appointment_to_dict` usando `check_schedule()`
+- Citas fuera de horario muestran ⚠️ en el título y borde naranja en el calendario
+
+### 4. Horarios especiales de fisios
+- Nueva tabla `PhysioSpecialSchedule` en BD (user_id, name, date_from/to, day_of_week, bloques mañana/tarde, is_off)
+- Endpoints CRUD + `check-conflicts` bloqueante
+- UI en tab "Disponibilidad fisios" con check "Un solo día" y tabla dinámica por rango
+- `physioBlocksForDate` y `checkPhysioSchedule` consultan especiales antes del horario normal
+- Corregido conflicto de rutas FastAPI: `check-conflicts` y `POST` movidos antes de `GET /{user_id}`
+
+### 5. Agrupación pestañas "Datos"
+- Las 4 pestañas (Importar datos, Exportar gestoría, Backup, Almacenamiento) fusionadas en una sola pestaña "Datos"
+- "Backup" renombrado a "Copia de seguridad"
+
+### 6. Días en horario especial fisio
+- `renderPhysioSpecialBody` calcula qué días de la semana caen realmente en el rango de fechas
+- Listeners en `psp-from` y `psp-to` regeneran la tabla al cambiar fechas
+
+### 7. Botón limpiar + validación de combinaciones de horario
+- Botón × para limpiar filas de hora en todas las tablas de horario
+- Validación de los 4 casos válidos (mañana+tarde, jornada continua, solo mañana, solo tarde) con error inline en tiempo real y bloqueo al guardar
+
+### 8. Corrección slots disponibles en fechas futuras
+- Al seleccionar una fecha en el modal de nueva cita que no está en el rango de constraints cargado, se recarga automáticamente antes de calcular los slots
+
+### 9. Paginación mejorada
+- Campo "Ir a página..." en `patients/list.html` y `audit/list.html`
+- Al entrar en un paciente y volver, se recupera la página en la que se estaba (via `sessionStorage`)
+
+### 10. Mensaje WhatsApp por defecto actualizado
+- Nuevo texto: "Hola {nombre}, te recordamos que tienes cita en Santé Fisioterapia el {fecha} a las {hora}, ¿nos confirmas tu asistencia? ¡Gracias!"
+ — consentimiento informado
 - Soporte completo para la plantilla `CI PUNCION SECA.docx`
 - Campo `patología_paciente` en el formulario (solo se muestra al seleccionar esta plantilla)
 - Procesamiento de tablas en documentos .docx (además de párrafos, headers y footers)

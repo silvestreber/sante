@@ -1,3 +1,30 @@
+"""Router de gestión de citas.
+
+Endpoints:
+    GET  /api/appointments          -> lista citas en un rango de fechas (filtros:
+                                       physio_id, location, patient_id).
+    POST /api/appointments          -> crea una cita individual.
+    PUT  /api/appointments/{id}     -> actualiza una cita (hora, estado, importe, bono...).
+    DELETE /api/appointments/{id}   -> cancela una cita (status -> CANCELLED).
+    POST /api/appointments/recurrence -> crea citas recurrentes (varios días/semanas).
+    GET  /api/appointments/physios  -> lista fisioterapeutas activos (para el selector del calendario).
+
+Validaciones al crear/editar:
+    check_schedule() -> verifica que la cita cae dentro del horario de apertura
+                        (Schedule / SpecialSchedule) y no es festivo (Holiday).
+                        Con force=True se puede saltar esta validación.
+    check_overlap()  -> verifica que el fisio no tiene otra cita solapada.
+
+Recurrencias:
+    Se genera un UUID como recurrence_group para agrupar las citas de una serie.
+    Se crean citas para cada combinación de semana x día_de_semana indicada.
+    Las citas solapadas se saltan (no se crean) y se devuelve el conteo.
+
+Importe y bonos:
+    amount              -> importe en euros de la sesión (se fija al finalizar la cita).
+    paid_with_pack      -> True si se pagó con bono.
+    pack_sessions_consumed -> número de sesiones de bono consumidas.
+"""
 import uuid
 from datetime import datetime, timedelta
 
@@ -45,6 +72,7 @@ class AppointmentUpdate(BaseModel):
     amount: float | None = None
     paid_with_pack: bool | None = None
     pack_sessions_consumed: int | None = None
+    force: bool = False
 
 
 class RecurrenceCreate(BaseModel):
@@ -59,7 +87,11 @@ class RecurrenceCreate(BaseModel):
 
 
 def check_schedule(db: Session, start: datetime, duration: int):
-    """Verifica que la cita cae dentro del horario de apertura y no en festivo."""
+    """Verifica que la cita cae dentro del horario de apertura y no en festivo.
+
+    Comprueba en orden: festivos (Holiday), horario especial (SpecialSchedule)
+    y horario normal (Schedule). Devuelve un mensaje de error o None si es válido.
+    """
     day = start.date()
     end = start + timedelta(minutes=duration)
 
@@ -101,6 +133,13 @@ def check_schedule(db: Session, start: datetime, duration: int):
 
 
 def check_overlap(db: Session, physio_id: int, start: datetime, duration: int, exclude_id: int | None = None):
+    """Comprueba si el fisio tiene otra cita solapada en el intervalo dado.
+
+    Devuelve True si hay solapamiento (la cita no se puede crear/mover).
+    exclude_id permite excluir la propia cita al editar (evita falso positivo).
+    El cálculo de solapamiento se hace en Python porque SQLite no soporta
+    aritmética de intervalos en SQL.
+    """
     end = start + timedelta(minutes=duration)
     query = db.query(Appointment).filter(
         Appointment.physio_id == physio_id,
@@ -124,9 +163,18 @@ def check_overlap(db: Session, physio_id: int, start: datetime, duration: int, e
 
 
 def appointment_to_dict(apt: Appointment, db: Session = None):
+    """Serializa una cita a diccionario para la respuesta JSON.
+
+    Si se pasa `db`, incluye `has_session` (True si ya existe una sesión clínica
+    asociada a esta cita, para que el frontend sepa si ya fue registrada) y
+    `out_of_hours` (True si la cita queda fuera del horario actual de la clínica).
+    """
     has_session = False
+    out_of_hours = False
     if db:
         has_session = db.query(ClinicalSession).filter(ClinicalSession.appointment_id == apt.id).first() is not None
+        if apt.status not in (AppointmentStatus.CANCELLED, AppointmentStatus.FINALIZED):
+            out_of_hours = check_schedule(db, apt.start_time, apt.duration_minutes) is not None
     return {
         "id": apt.id,
         "patient_id": apt.patient_id,
@@ -142,6 +190,7 @@ def appointment_to_dict(apt: Appointment, db: Session = None):
         "recurrence_group": apt.recurrence_group,
         "created_by": apt.created_by,
         "has_session": has_session,
+        "out_of_hours": out_of_hours,
         "amount": apt.amount,
         "paid_with_pack": apt.paid_with_pack,
         "pack_sessions_consumed": apt.pack_sessions_consumed,
@@ -239,6 +288,9 @@ def update_appointment(
     if data.start_time or data.duration_minutes:
         if check_overlap(db, apt.physio_id, new_start, new_duration, exclude_id=apt.id):
             raise HTTPException(status_code=409, detail="Este fisio ya tiene ocupada esa hora")
+        schedule_error = check_schedule(db, new_start, new_duration)
+        if schedule_error and not data.force:
+            raise HTTPException(status_code=409, detail=schedule_error)
         apt.start_time = new_start
         apt.duration_minutes = new_duration
 

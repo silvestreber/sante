@@ -16,7 +16,7 @@ Documento de referencia de todo lo que hace la aplicación. Actualizado al estad
 ### Pacientes
 
 - Registrar un nuevo paciente mediante un formulario con sus datos personales (nombre, apellidos, teléfono, email, dirección, fecha de nacimiento, DNI/NIE, notas).
-- Ver la lista completa de pacientes, con **búsqueda flexible** por nombre, apellidos o teléfono: se puede escribir cualquier combinación de palabras en cualquier orden (por ejemplo "Pérez Castilla", "Francisco Castilla" o solo "isco") y encontrará al paciente. La búsqueda **no distingue mayúsculas/minúsculas ni tildes** (buscar "perez" encuentra "Pérez").
+- Ver la lista completa de pacientes, con **búsqueda flexible** por nombre, apellidos o teléfono. La paginación incluye un campo **"Ir a página..."** para saltar directamente a cualquier página. Al entrar en la ficha de un paciente y volver a la lista, se recupera automáticamente la página en la que se estaba.: se puede escribir cualquier combinación de palabras en cualquier orden (por ejemplo "Pérez Castilla", "Francisco Castilla" o solo "isco") y encontrará al paciente. La búsqueda **no distingue mayúsculas/minúsculas ni tildes** (buscar "perez" encuentra "Pérez").
 - **Pacientes sin ficha (provisionales):** un paciente nuevo puede darse de alta con datos mínimos (nombre, apellidos, teléfono y email opcional) directamente al crear una cita, sin necesidad de rellenar la ficha completa. Estos pacientes se marcan como "sin ficha" y su ficha clínica se completa más adelante, cuando acuden a la consulta (ver "Completar ficha").
 - **Notas del paciente:** la ficha incluye un campo de notas libres para anotaciones generales sobre el paciente, editable desde el formulario y visible en la ficha.
 - Desactivar pacientes (borrado lógico): el paciente deja de aparecer en la lista pero se conservan todos sus datos, historial, citas y facturas. Solo disponible para admin y recepción.
@@ -34,12 +34,13 @@ Documento de referencia de todo lo que hace la aplicación. Actualizado al estad
 - Al iniciar sesión, la vista principal es el calendario.
 - Al entrar tras el login se muestra un modal con los avisos sin leer, solo si hay alguno pendiente.
 - Vistas de mes, semana y día. En pantallas pequeñas (móvil) la cabecera del calendario se adapta automáticamente.
-- Los días de la semana siempre cerrados y las horas fuera del horario de apertura no se muestran. La pausa de mediodía (jornada partida) aparece como un bloque compacto en gris y no se puede seleccionar. Los días festivos aparecen en gris y no permiten citas.
+- Los días de la semana siempre cerrados y las horas fuera del horario de apertura no se muestran. La pausa de mediodía (jornada partida) aparece como un bloque compacto en gris y no se puede seleccionar. Los días festivos aparecen en **naranja/ámbar** en las vistas semana y día, y con el nombre del festivo en rojo en la vista mes; no permiten citas.
 - Cada fisioterapeuta tiene un color asignado; sus citas se muestran en ese color. Las citas simultáneas de distintos fisios se muestran lado a lado, sin superposición.
-- Las citas **pendientes** se muestran con opacidad reducida. Las citas **finalizadas** se distinguen con un patrón de rayas diagonales y un "✓" delante del nombre del paciente.
+- Las citas **pendientes** se muestran con opacidad reducida. Las citas **finalizadas** se distinguen con un patrón de rayas diagonales y un "✓" delante del nombre del paciente. Las citas **fuera del horario actual** de la clínica muestran un aviso ⚠️ en el título y borde naranja.
 - Botón "Nueva cita" junto al título, y también se puede crear haciendo clic en el calendario:
   - En vista de semana o día, el clic en una franja horaria abre el modal en esa hora.
   - En vista de mes, el clic en un día abre el modal con la hora de apertura de ese día.
+- Al seleccionar una fecha futura en el modal de nueva cita, las horas disponibles se calculan correctamente aunque esa semana no esté visible en el calendario.
 - Filtros del calendario: por ubicación (clínica/domicilio) y por estado (pendientes/confirmadas). Si el usuario es fisioterapeuta, por defecto ve solo sus citas.
 
 #### Crear y editar una cita
@@ -144,15 +145,18 @@ Al finalizar una cita se abre un modal con:
 ### Configuración de la clínica
 
 - Configurar el horario de apertura para cada día de la semana, con soporte de jornada partida (mañana y tarde con pausa).
-- Crear horarios especiales para periodos concretos (verano, Navidad, etc.) que sobreescriben el horario normal durante esas fechas.
-- Configurar días festivos.
+- Crear horarios especiales para periodos concretos (verano, Navidad, etc.) que sobreescriben el horario normal durante esas fechas. Al guardar, se muestra la lista completa de citas afectadas (no solo la primera).
+- Configurar días festivos. Al añadir un festivo con citas ya existentes ese día, se muestra confirmación previa con la lista de citas afectadas.
 - Configurar el **horario personal de cada fisioterapeuta** (mañana, tarde y días libres). Es lo que determina las horas disponibles al crear una cita para ese fisio.
+- Configurar **horarios especiales por fisioterapeuta** para periodos concretos (rango de fechas). La tabla de días se genera dinámicamente mostrando solo los días que caen realmente en ese rango. Opción "Un solo día" para horarios de un día concreto. Al guardar, si hay citas del fisio en ese rango que quedan fuera del nuevo horario, el guardado se bloquea hasta resolver los conflictos.
 - Registrar **ausencias y vacaciones** de los fisioterapeutas (rango de fechas, opcionalmente franja horaria).
 - Configurar la **duración predeterminada de una cita**, introduciéndola como número de minutos (campo numérico libre).
 - Configurar el precio por defecto de sesión y de bono (se precargan en los formularios de cobro, modificables en cada caso).
-- Configurar el mensaje del recordatorio de WhatsApp.
+- Configurar el mensaje del recordatorio de WhatsApp. Mensaje por defecto actualizado.
 - Asignar un color a cada fisioterapeuta (usado en el calendario).
 - Importar pacientes desde Excel y exportar la facturación para la gestoría en Excel.
+- Las pestañas "Importar datos", "Exportar gestoría", "Copia de seguridad" y "Almacenamiento" están agrupadas en una sola pestaña **"Datos"**.
+- Todas las tablas de horario incluyen un botón **×** para limpiar cualquier fila, y validación en tiempo real que detecta combinaciones de horario incoherentes con error inline.
 
 ### Contabilidad
 
@@ -177,6 +181,7 @@ Al finalizar una cita se abre un modal con:
 ### Registro de actividad (auditoría)
 
 - Registro de quién ha hecho qué y cuándo (crear, editar, eliminar, cancelar, etc.), con filtros por usuario, acción, entidad y fechas.
+- La paginación incluye un campo **"Ir a página..."** para saltar directamente a cualquier página.
 
 ---
 

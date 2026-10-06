@@ -9,6 +9,7 @@
     #calendar-container .fc { }
     #calendar-container .fc-timegrid-slot { cursor: pointer; height: 60px !important; }
     #calendar-container .fc-bg-event { cursor: not-allowed !important; }
+    #calendar-container .fc-bg-event[style*="fed7aa"] { opacity: 0.5 !important; }
     #calendar-container .fc-timegrid-slot.slot-closed {
         cursor: not-allowed;
     }
@@ -297,7 +298,7 @@
                 </div>
 
                 <div id="modal-error" class="hidden text-sm text-red-600 bg-red-50 p-2 rounded"></div>
-                <button type="button" id="btn-force-save" class="hidden w-full bg-amber-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-600">Guardar de todas formas</button>
+                <button type="button" id="btn-force-save" class="hidden w-full bg-amber-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-600">Guardar de todas formas (ignorar restricción de horario)</button>
 
                 <div id="action-buttons-row" class="hidden space-y-2 pt-2">
                     <!-- Fila 1: enviar recordatorio | confirmar/finalizar -->
@@ -666,8 +667,9 @@
                 start: h.date,
                 end: h.date,
                 display: 'background',
-                backgroundColor: '#e5e7eb',
+                backgroundColor: '#fed7aa',
                 allDay: true,
+                extendedProps: { isHoliday: true, holidayName: h.name || '' },
             });
         }
 
@@ -761,12 +763,32 @@
                 if (info.event.extendedProps.opacity && info.event.extendedProps.opacity < 1) {
                     info.el.style.opacity = info.event.extendedProps.opacity;
                 }
+                if (info.event.extendedProps.outOfHours) {
+                    info.el.style.borderLeft = '4px solid #f97316';
+                    info.el.style.borderTop = '2px solid #f97316';
+                    info.el.title = '⚠️ Esta cita está fuera del horario actual de la clínica';
+                }
                 // Cita finalizada: patrón de rayas diagonales sobre el color del fisio
                 // para diferenciarla claramente del resto, manteniendo su color.
                 if (info.event.extendedProps.isFinalized) {
                     info.el.style.backgroundImage =
                         'repeating-linear-gradient(45deg, rgba(255,255,255,0.28) 0, rgba(255,255,255,0.28) 4px, transparent 4px, transparent 8px)';
                     info.el.style.opacity = '0.85';
+                }
+            },
+            dayCellDidMount: (info) => {
+                if (!constraints) return;
+                const dayKey = info.date.getFullYear() + '-' + String(info.date.getMonth()+1).padStart(2,'0') + '-' + String(info.date.getDate()).padStart(2,'0');
+                const holiday = constraints.holidays.find(h => h.date === dayKey);
+                if (holiday) {
+                    info.el.style.backgroundColor = '#fff7ed';
+                    if (holiday.name) {
+                        const label = document.createElement('div');
+                        label.className = 'fc-holiday-label';
+                        label.textContent = holiday.name;
+                        label.style.cssText = 'font-size:0.6rem;color:#c2410c;font-weight:600;padding:1px 3px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                        info.el.querySelector('.fc-daygrid-day-top')?.appendChild(label);
+                    }
                 }
             },
             datesSet: async (info) => {
@@ -845,13 +867,14 @@
                 return {
                     id: apt.id,
                     // Marca visual de finalizada: ✓ delante del nombre.
-                    title: isFinalized ? `✓ ${apt.patient_name}` : `${apt.patient_name}`,
+                    // Marca visual de fuera de horario: ⚠️ delante del nombre.
+                    title: isFinalized ? `✓ ${apt.patient_name}` : apt.out_of_hours ? `⚠️ ${apt.patient_name}` : apt.patient_name,
                     start: apt.start_time,
                     end: new Date(new Date(apt.start_time).getTime() + apt.duration_minutes * 60000).toISOString(),
                     backgroundColor: color,
-                    borderColor: apt.status === 'CANCELLED' ? '#ef4444' : color,
+                    borderColor: apt.out_of_hours ? '#f97316' : apt.status === 'CANCELLED' ? '#ef4444' : color,
                     textColor: '#fff',
-                    extendedProps: { appointmentData: apt, opacity, isFinalized },
+                    extendedProps: { appointmentData: apt, opacity, isFinalized, outOfHours: apt.out_of_hours },
                 };
             });
         successCallback(events);
@@ -1418,16 +1441,33 @@
     function physioBlocksForDate(physioId, dayKey) {
         const dt = new Date(dayKey + 'T00:00:00');
         const dow = (dt.getDay() + 6) % 7; // 0=Lunes
-        const schedule = physioSchedules[String(physioId)];
-        if (schedule && schedule[dow]) {
-            const d = schedule[dow];
-            if (d.is_off) return [];
+        const physioData = physioSchedules[String(physioId)];
+
+        // Comprobar si hay horario especial del fisio para esta fecha
+        if (physioData && physioData.special) {
+            for (const sp of physioData.special) {
+                if (dayKey >= sp.date_from && dayKey <= sp.date_to && sp.days[dow]) {
+                    const d = sp.days[dow];
+                    if (d.is_off) return [];
+                    const blocks = [];
+                    if (d.morning_open && d.morning_close) blocks.push([d.morning_open, d.morning_close]);
+                    if (d.afternoon_open && d.afternoon_close) blocks.push([d.afternoon_open, d.afternoon_close]);
+                    return blocks;
+                }
+            }
+        }
+
+        // Fallback: horario normal del fisio
+        const schedule = physioData && physioData.normal ? physioData.normal[dow] : null;
+        if (schedule) {
+            if (schedule.is_off) return [];
             const blocks = [];
-            if (d.morning_open && d.morning_close) blocks.push([d.morning_open, d.morning_close]);
-            if (d.afternoon_open && d.afternoon_close) blocks.push([d.afternoon_open, d.afternoon_close]);
+            if (schedule.morning_open && schedule.morning_close) blocks.push([schedule.morning_open, schedule.morning_close]);
+            if (schedule.afternoon_open && schedule.afternoon_close) blocks.push([schedule.afternoon_open, schedule.afternoon_close]);
             return blocks;
         }
-        // Fallback: horario de clínica del día.
+
+        // Fallback final: horario de clínica del día
         const dayInfo = constraints && constraints.days ? constraints.days[dayKey] : null;
         if (!dayInfo || dayInfo.closed || !dayInfo.blocks) return [];
         return dayInfo.blocks.map(b => [b.open, b.close]);
@@ -1501,25 +1541,42 @@
 
     // Check physio personal schedule
     function checkPhysioSchedule(physioId, startTime, duration) {
-        const schedule = physioSchedules[String(physioId)];
-        if (!schedule) return null; // No schedule configured, allow
+        const physioData = physioSchedules[String(physioId)];
         const dt = new Date(startTime);
-        const dow = (dt.getDay() + 6) % 7; // Convert to 0=Monday
-        const daySchedule = schedule[dow];
-        if (!daySchedule) return null;
-        if (daySchedule.is_off) return 'El fisioterapeuta tiene el día libre';
+        const dow = (dt.getDay() + 6) % 7;
+        const dayKey = startTime.slice(0, 10);
         const time = dt.toTimeString().slice(0, 5);
         const endDt = new Date(dt.getTime() + duration * 60000);
         const endTime = endDt.toTimeString().slice(0, 5);
 
+        // Comprobar horario especial del fisio primero
+        if (physioData && physioData.special) {
+            for (const sp of physioData.special) {
+                if (dayKey >= sp.date_from && dayKey <= sp.date_to && sp.days[dow]) {
+                    const d = sp.days[dow];
+                    if (d.is_off) return `El fisioterapeuta no está disponible ese día (${d.name || 'horario especial'})`;
+                    const blocks = [];
+                    if (d.morning_open && d.morning_close) blocks.push([d.morning_open, d.morning_close]);
+                    if (d.afternoon_open && d.afternoon_close) blocks.push([d.afternoon_open, d.afternoon_close]);
+                    if (blocks.length === 0) return null;
+                    const inBlock = blocks.some(([o, c]) => time >= o && endTime <= c);
+                    if (!inBlock) {
+                        const ranges = blocks.map(([o, c]) => `${o}-${c}`).join(', ');
+                        return `La cita está fuera del horario especial del fisioterapeuta (${ranges})`;
+                    }
+                    return null;
+                }
+            }
+        }
+
+        // Horario normal
+        const schedule = physioData && physioData.normal ? physioData.normal[dow] : null;
+        if (!schedule) return null;
+        if (schedule.is_off) return 'El fisioterapeuta tiene el día libre';
         const blocks = [];
-        if (daySchedule.morning_open && daySchedule.morning_close)
-            blocks.push([daySchedule.morning_open, daySchedule.morning_close]);
-        if (daySchedule.afternoon_open && daySchedule.afternoon_close)
-            blocks.push([daySchedule.afternoon_open, daySchedule.afternoon_close]);
-
+        if (schedule.morning_open && schedule.morning_close) blocks.push([schedule.morning_open, schedule.morning_close]);
+        if (schedule.afternoon_open && schedule.afternoon_close) blocks.push([schedule.afternoon_open, schedule.afternoon_close]);
         if (blocks.length === 0) return null;
-
         const inBlock = blocks.some(([o, c]) => time >= o && endTime <= c);
         if (!inBlock) {
             const ranges = blocks.map(([o, c]) => `${o}-${c}`).join(', ');
@@ -1553,7 +1610,15 @@
     }
 
     // Al cambiar día o fisio, recalcular las horas disponibles.
-    document.getElementById('apt-date').addEventListener('change', refreshSlots);
+    document.getElementById('apt-date').addEventListener('change', async () => {
+        const dayKey = document.getElementById('apt-date').value;
+        if (dayKey && (!constraints || !constraints.days[dayKey])) {
+            const dayStart = new Date(dayKey + 'T00:00:00');
+            const dayEnd = new Date(dayStart.getTime() + 86400000);
+            await loadConstraints(dayStart.toISOString(), dayEnd.toISOString());
+        }
+        refreshSlots();
+    });
     document.getElementById('apt-physio').addEventListener('change', refreshSlots);
 
     // Expandir al abrir (click/focus) y contraer al elegir o salir.
@@ -1662,35 +1727,51 @@
             if (!id) checkPatientInWaitlist(patientId);
         } else {
             const err = await res.json();
-            errorEl.textContent = err.detail || 'Error al guardar';
+            const detail = err.detail || 'Error al guardar';
+            errorEl.textContent = detail;
             errorEl.classList.remove('hidden');
-            // Si es error de horario, mostrar botón para forzar
-            if (res.status === 409 && err.detail && err.detail.includes('horario')) {
-                document.getElementById('btn-force-save').classList.remove('hidden');
-            }
+            // Mostrar "Guardar de todas formas" ante cualquier aviso de horario o festivo
+            const isScheduleConflict = res.status === 409 && (
+                detail.includes('festivo') ||
+                detail.includes('horario') ||
+                detail.includes('cerrada')
+            );
+            document.getElementById('btn-force-save').classList.toggle('hidden', !isScheduleConflict);
         }
     });
 
-    // Forzar guardado fuera de horario
+    // Guardar de todas formas (fuerza la cita ignorando horario/festivo)
     document.getElementById('btn-force-save').addEventListener('click', async () => {
+        const id = document.getElementById('apt-id').value;
         const patientId = document.getElementById('apt-patient').value;
         const physioId = document.getElementById('apt-physio').value;
         const startTime = document.getElementById('apt-start').value;
         const duration = parseInt(document.getElementById('apt-duration').value);
         const location = document.getElementById('apt-location').value;
+        const status = document.getElementById('apt-status').value;
         const notes = document.getElementById('apt-notes').value;
 
-        const res = await authFetch('/api/appointments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ patient_id: parseInt(patientId), physio_id: parseInt(physioId), start_time: startTime, duration_minutes: duration, location, notes, force: true }),
-        });
+        let res;
+        if (id) {
+            // Edición: PUT no tiene campo force, el backend no revalida horario al editar
+            res = await authFetch(`/api/appointments/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_time: startTime, duration_minutes: duration, location, status, notes, physio_id: parseInt(physioId) }),
+            });
+        } else {
+            res = await authFetch('/api/appointments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ patient_id: parseInt(patientId), physio_id: parseInt(physioId), start_time: startTime, duration_minutes: duration, location, notes, force: true }),
+            });
+        }
 
         if (res.ok) {
             closeModal();
             calendar.refetchEvents();
-            showToast('Cita creada');
-            checkPatientInWaitlist(patientId);
+            showToast(id ? 'Cita actualizada' : 'Cita creada');
+            if (!id) checkPatientInWaitlist(patientId);
         } else {
             const err = await res.json();
             document.getElementById('modal-error').textContent = err.detail || 'Error al guardar';

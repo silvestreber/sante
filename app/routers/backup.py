@@ -1,3 +1,25 @@
+"""Router de backup (exportación e importación de la base de datos).
+
+Endpoints (solo ADMIN, requieren verificación de contraseña):
+    POST /api/backup/export -> descarga una copia de sante.db como fichero .db.
+                               Antes de devolver el fichero, guarda una copia
+                               en la carpeta backups/ con timestamp.
+    POST /api/backup/import -> restaura la BD desde un fichero .db subido.
+                               Antes de sobreescribir, guarda una copia de
+                               seguridad del estado actual (pre_restore_*).
+                               Cierra todas las conexiones activas (engine.dispose())
+                               antes de escribir el nuevo fichero.
+
+Seguridad:
+    Ambas operaciones requieren que el usuario ADMIN introduzca su contraseña
+    (campo `password` en el body). Esto evita que una sesión robada pueda
+    exportar o sobreescribir la BD.
+
+Directorio de backups:
+    Los backups se guardan en <raiz_proyecto>/backups/ (no en el USB).
+    El backup automático diario/mensual lo gestiona el cron del sistema
+    (backup_db.sh). Ver DESPLIEGUE.md.
+"""
 import os
 import shutil
 from datetime import datetime

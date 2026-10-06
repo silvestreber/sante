@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_role
 from app.db.database import SessionLocal, get_db
-from app.db.models import Appointment, AppointmentStatus, Config, Holiday, PhysioAbsence, PhysioSchedule, Schedule, SpecialSchedule, User, UserRole
+from app.db.models import Appointment, AppointmentStatus, Config, Holiday, PhysioAbsence, PhysioSchedule, PhysioSpecialSchedule, Schedule, SpecialSchedule, User, UserRole
 from app import storage
 
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -57,6 +57,10 @@ class ScheduleConflictCheck(BaseModel):
     date_to: str | None = None
 
 
+class HolidayConflictCheck(BaseModel):
+    date: str  # YYYY-MM-DD
+
+
 # --- Helpers config ---
 
 def get_config(db: Session, key: str, default: str = "") -> str:
@@ -96,6 +100,23 @@ class PhysioAbsenceCreate(BaseModel):
     reason: str | None = None
 
 
+class PhysioSpecialScheduleItem(BaseModel):
+    day_of_week: int
+    morning_open: str | None = None
+    morning_close: str | None = None
+    afternoon_open: str | None = None
+    afternoon_close: str | None = None
+    is_off: bool = False
+
+
+class PhysioSpecialScheduleCreate(BaseModel):
+    user_id: int
+    name: str
+    date_from: str  # YYYY-MM-DD
+    date_to: str
+    schedules: list[PhysioSpecialScheduleItem]
+
+
 # --- Comprobación de citas fuera de horario ---
 
 def _appointment_out_of_schedule(apt: Appointment, schedules_by_dow: dict) -> bool:
@@ -128,7 +149,6 @@ def check_schedule_conflicts(
     now = datetime.now()
 
     if data.date_from and data.date_to:
-        # Horario especial: buscar solo en el rango
         date_from = datetime.fromisoformat(data.date_from)
         date_to = datetime.fromisoformat(data.date_to + "T23:59:59")
         query = db.query(Appointment).filter(
@@ -137,23 +157,47 @@ def check_schedule_conflicts(
             Appointment.start_time <= date_to,
         )
     else:
-        # Horario normal: buscar desde ahora en adelante
         query = db.query(Appointment).filter(
             Appointment.status != AppointmentStatus.CANCELLED,
             Appointment.start_time >= now,
         )
 
+    conflicts = []
     for apt in query.order_by(Appointment.start_time).all():
         if _appointment_out_of_schedule(apt, schedules_by_dow):
-            return {
-                "conflict": True,
-                "appointment": {
-                    "id": apt.id,
-                    "start_time": apt.start_time.isoformat(),
-                    "patient_name": f"{apt.patient.first_name} {apt.patient.last_name}" if apt.patient else "",
-                }
-            }
-    return {"conflict": False}
+            conflicts.append({
+                "id": apt.id,
+                "start_time": apt.start_time.isoformat(),
+                "patient_name": f"{apt.patient.first_name} {apt.patient.last_name}" if apt.patient else "",
+            })
+    return {"conflict": len(conflicts) > 0, "appointments": conflicts}
+
+
+@router.post("/check-holiday-conflicts")
+def check_holiday_conflicts(
+    data: HolidayConflictCheck,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Devuelve las citas futuras (no canceladas) que caen en la fecha festiva indicada."""
+    d = date.fromisoformat(data.date)
+    day_start = datetime(d.year, d.month, d.day, 0, 0, 0)
+    day_end = datetime(d.year, d.month, d.day, 23, 59, 59)
+    now = datetime.now()
+    apts = db.query(Appointment).filter(
+        Appointment.status != AppointmentStatus.CANCELLED,
+        Appointment.start_time >= max(now, day_start),
+        Appointment.start_time <= day_end,
+    ).order_by(Appointment.start_time).all()
+    conflicts = [
+        {
+            "id": apt.id,
+            "start_time": apt.start_time.isoformat(),
+            "patient_name": f"{apt.patient.first_name} {apt.patient.last_name}" if apt.patient else "",
+        }
+        for apt in apts
+    ]
+    return {"conflict": len(conflicts) > 0, "appointments": conflicts}
 
 
 # --- Horario normal ---
@@ -372,7 +416,7 @@ def get_calendar_constraints(
 
 # --- Configuración general ---
 
-DEFAULT_WHATSAPP = "Hola {nombre}, te recordamos que tienes cita en Santé Fisioterapia el {fecha} a las {hora}. Si no puedes asistir, por favor avísanos para cambiarla o cancelarla. ¡Gracias!"
+DEFAULT_WHATSAPP = "Hola {nombre}, te recordamos que tienes cita en Santé Fisioterapia el {fecha} a las {hora}, ¿nos confirmas tu asistencia?\n¡Gracias!"
 
 
 @router.get("/settings")
@@ -436,20 +480,45 @@ def save_physio_schedule(data: PhysioScheduleBulk, db: Session = Depends(get_db)
 
 @router.get("/physio-schedules")
 def list_all_physio_schedules(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Devuelve horarios de todos los fisios para validación en frontend."""
+    """Devuelve horarios normales y especiales de todos los fisios para el calendario."""
     physios = db.query(User).filter(User.is_physio == True, User.is_active == True).all()
     result = {}
+    today = date.today()
     for p in physios:
         rows = db.query(PhysioSchedule).filter(PhysioSchedule.user_id == p.id).all()
-        result[str(p.id)] = {
-            r.day_of_week: {
-                "morning_open": r.morning_open,
-                "morning_close": r.morning_close,
-                "afternoon_open": r.afternoon_open,
-                "afternoon_close": r.afternoon_close,
-                "is_off": r.is_off,
+        specials = db.query(PhysioSpecialSchedule).filter(
+            PhysioSpecialSchedule.user_id == p.id,
+            PhysioSpecialSchedule.date_to >= today,
+        ).all()
+        # Agrupar especiales por (date_from, date_to) -> {dow: row}
+        special_map: dict = {}
+        for s in specials:
+            key = (s.date_from.isoformat(), s.date_to.isoformat())
+            if key not in special_map:
+                special_map[key] = {}
+            special_map[key][s.day_of_week] = {
+                "morning_open": s.morning_open,
+                "morning_close": s.morning_close,
+                "afternoon_open": s.afternoon_open,
+                "afternoon_close": s.afternoon_close,
+                "is_off": s.is_off,
+                "name": s.name,
             }
-            for r in rows
+        result[str(p.id)] = {
+            "normal": {
+                r.day_of_week: {
+                    "morning_open": r.morning_open,
+                    "morning_close": r.morning_close,
+                    "afternoon_open": r.afternoon_open,
+                    "afternoon_close": r.afternoon_close,
+                    "is_off": r.is_off,
+                }
+                for r in rows
+            },
+            "special": [
+                {"date_from": df, "date_to": dt, "days": days_map}
+                for (df, dt), days_map in special_map.items()
+            ],
         }
     return result
 
@@ -464,6 +533,115 @@ def shutdown_system(
     else:
         subprocess.Popen(["sudo", "shutdown", "-h", "now"])
     return {"message": "Apagando sistema..."}
+
+
+# --- Horarios especiales de fisioterapeutas ---
+
+@router.post("/physio-special-schedules/check-conflicts")
+def check_physio_special_schedule_conflicts(
+    data: PhysioSpecialScheduleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Devuelve las citas del fisio en el rango que quedan fuera del nuevo horario especial.
+    Si hay conflictos, el guardado debe bloquearse hasta que se resuelvan."""
+    schedules_by_dow = {s.day_of_week: s.model_dump() for s in data.schedules}
+    date_from = datetime.fromisoformat(data.date_from)
+    date_to = datetime.fromisoformat(data.date_to + "T23:59:59")
+    now = datetime.now()
+
+    apts = db.query(Appointment).filter(
+        Appointment.physio_id == data.user_id,
+        Appointment.status != AppointmentStatus.CANCELLED,
+        Appointment.start_time >= max(now, date_from),
+        Appointment.start_time <= date_to,
+    ).order_by(Appointment.start_time).all()
+
+    conflicts = []
+    for apt in apts:
+        if _appointment_out_of_schedule(apt, schedules_by_dow):
+            conflicts.append({
+                "id": apt.id,
+                "start_time": apt.start_time.isoformat(),
+                "patient_name": f"{apt.patient.first_name} {apt.patient.last_name}" if apt.patient else "",
+            })
+    return {"conflict": len(conflicts) > 0, "appointments": conflicts}
+
+
+@router.post("/physio-special-schedules", status_code=201)
+def create_physio_special_schedule(
+    data: PhysioSpecialScheduleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    date_from = date.fromisoformat(data.date_from)
+    date_to = date.fromisoformat(data.date_to)
+    for item in data.schedules:
+        db.add(PhysioSpecialSchedule(
+            user_id=data.user_id,
+            name=data.name.strip(),
+            date_from=date_from,
+            date_to=date_to,
+            day_of_week=item.day_of_week,
+            morning_open=item.morning_open,
+            morning_close=item.morning_close,
+            afternoon_open=item.afternoon_open,
+            afternoon_close=item.afternoon_close,
+            is_off=item.is_off,
+        ))
+    db.commit()
+    return {"message": "Horario especial creado"}
+
+
+@router.get("/physio-special-schedules/{user_id}")
+def list_physio_special_schedules(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = db.query(PhysioSpecialSchedule).filter(
+        PhysioSpecialSchedule.user_id == user_id
+    ).order_by(PhysioSpecialSchedule.date_from.desc(), PhysioSpecialSchedule.day_of_week).all()
+    grouped: dict = {}
+    for r in rows:
+        key = f"{r.name}|{r.date_from}|{r.date_to}"
+        if key not in grouped:
+            grouped[key] = {
+                "id": r.id,
+                "name": r.name,
+                "date_from": r.date_from.isoformat(),
+                "date_to": r.date_to.isoformat(),
+                "schedules": [],
+            }
+        grouped[key]["schedules"].append({
+            "day_of_week": r.day_of_week,
+            "morning_open": r.morning_open,
+            "morning_close": r.morning_close,
+            "afternoon_open": r.afternoon_open,
+            "afternoon_close": r.afternoon_close,
+            "is_off": r.is_off,
+        })
+    return list(grouped.values())
+
+
+@router.delete("/physio-special-schedules/{schedule_id}")
+def delete_physio_special_schedule(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    # Borrar todos los registros del mismo grupo (mismo name+date_from+date_to+user)
+    row = db.query(PhysioSpecialSchedule).filter(PhysioSpecialSchedule.id == schedule_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    db.query(PhysioSpecialSchedule).filter(
+        PhysioSpecialSchedule.user_id == row.user_id,
+        PhysioSpecialSchedule.name == row.name,
+        PhysioSpecialSchedule.date_from == row.date_from,
+        PhysioSpecialSchedule.date_to == row.date_to,
+    ).delete()
+    db.commit()
+    return {"message": "Horario especial eliminado"}
 
 
 # --- Ausencias de fisioterapeutas ---

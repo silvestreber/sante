@@ -1,3 +1,17 @@
+"""Configuración de la conexión a la base de datos SQLite.
+
+Usa SQLAlchemy como ORM. La BD se almacena en `sante.db` en la raíz del proyecto.
+
+Características especiales:
+    - Se registra la función SQL `unaccent` en cada conexión SQLite para permitir
+      búsquedas insensibles a tildes (ej: "perez" encuentra "Pérez").
+    - `get_db()` es la dependencia FastAPI estándar para inyectar una sesión de BD
+      en los endpoints; garantiza que la sesión se cierra al terminar la petición.
+
+Uso en endpoints:
+    def mi_endpoint(db: Session = Depends(get_db)):
+        ...
+"""
 import unicodedata
 
 from sqlalchemy import create_engine, event
@@ -28,6 +42,11 @@ def _register_sqlite_functions(dbapi_connection, connection_record):
 
 
 def get_db():
+    """Dependencia FastAPI que proporciona una sesión de BD por petición.
+
+    Abre una sesión, la cede al endpoint y la cierra al finalizar (incluso si
+    hay una excepción). Uso: `db: Session = Depends(get_db)`.
+    """
     db = SessionLocal()
     try:
         yield db

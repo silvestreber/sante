@@ -1,3 +1,23 @@
+"""Router de historial clínico y sesiones.
+
+Endpoints:
+    GET  /api/clinical/patient/{id}  -> historial completo de sesiones de un paciente
+                                        (incluye info de pago, bono y duración).
+    POST /api/clinical/sessions      -> registra una sesión clínica vinculada a una cita.
+    POST /api/clinical/sessions/manual -> registra una sesión manual (sin cita asociada,
+                                          para sesiones anteriores o externas a la clínica).
+    PUT  /api/clinical/sessions/{id} -> actualiza las observaciones de una sesión.
+
+Sesiones manuales (is_manual=True):
+    No tienen appointment_id. Se usan para incorporar al historial sesiones que
+    no pasaron por el sistema (p.ej. tratamientos previos). No se puede emitir
+    justificante de asistencia para estas sesiones.
+
+Fecha de la sesión:
+    Al crear una sesión vinculada a una cita, la fecha se toma de la cita
+    (appointment.start_time), no de la fecha actual. Así el historial refleja
+    cuándo se realizó la sesión, no cuándo se registró.
+"""
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException

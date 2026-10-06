@@ -1,4 +1,40 @@
-﻿import glob
+"""Router de facturación: facturas, bonos de sesiones y exportación Excel.
+
+Endpoints de facturas:
+    GET    /api/billing/invoices/patient/{id} -> lista facturas de un paciente.
+    POST   /api/billing/invoices             -> crea factura y genera su PDF.
+    PUT    /api/billing/invoices/{id}        -> actualiza factura y regenera PDF.
+    GET    /api/billing/invoices/{id}/pdf    -> sirve el PDF de la factura.
+    DELETE /api/billing/invoices/{id}        -> elimina factura, PDF e ingreso contable.
+    GET    /api/billing/pending              -> pacientes con facturas pendientes de pago.
+
+Endpoints de bonos (SessionPack):
+    GET    /api/billing/packs/patient/{id}   -> lista bonos de un paciente.
+    POST   /api/billing/packs                -> crea un bono.
+    POST   /api/billing/packs/{id}/consume   -> consume una sesión del bono.
+    PUT    /api/billing/packs/{id}           -> actualiza el bono (regenera PDF si cambia precio).
+    DELETE /api/billing/packs/{id}           -> cancela el bono y revierte contabilidad.
+
+Exportación:
+    POST /api/billing/export-excel           -> exporta facturas pagadas a Excel
+                                               (formato para la gestoría).
+
+Lógica de almacenamiento:
+    Antes de cualquier operación que genere o modifique un PDF, se comprueba que
+    el USB esté montado (_ensure_storage_available). Si no lo está, se lanza
+    StorageUnavailableError (HTTP 503) sin tocar la BD.
+
+Numeración de documentos:
+    F-YYYY-NNNN  -> Factura.
+    FS-YYYY-NNNN -> Factura simplificada.
+    J-YYYY-NNNN  -> Justificante de pago.
+    La numeración es correlativa por tipo y año (_next_invoice_number).
+
+Contabilidad automática:
+    Al marcar una factura como pagada se crea automáticamente un FinanceEntry
+    de tipo INCOME. Al desmarcarla o eliminarla, el ingreso se elimina.
+"""
+import glob
 import io
 import os
 from datetime import date, datetime, timezone
