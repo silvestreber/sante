@@ -88,6 +88,43 @@ def get_patient_history(
             "invoice_id": invoice.id if invoice else None,
             "duration_minutes": appointment.duration_minutes if appointment else None,
             "is_manual": bool(s.is_manual),
+            "is_future": False,
+        })
+
+    # Citas futuras (programadas, aún no realizadas): se muestran en el historial
+    # como informativas. No son sesiones, así que NO permiten editar seguimiento,
+    # justificante de asistencia ni cobro desde aquí. Se excluyen las canceladas,
+    # las ya finalizadas y las que ya tienen una sesión clínica registrada.
+    from app.db.models import AppointmentStatus
+    now = datetime.now()
+    future_appts = db.query(Appointment).filter(
+        Appointment.patient_id == patient_id,
+        Appointment.start_time >= now,
+        Appointment.status != AppointmentStatus.CANCELLED,
+        Appointment.status != AppointmentStatus.FINALIZED,
+    ).order_by(Appointment.start_time.asc()).all()
+
+    for apt in future_appts:
+        # Evitar duplicar si ya existe una sesión clínica para esa cita.
+        has_session = db.query(ClinicalSession).filter(
+            ClinicalSession.appointment_id == apt.id
+        ).first() is not None
+        if has_session:
+            continue
+        result.append({
+            "id": None,
+            "appointment_id": apt.id,
+            "date": apt.start_time.isoformat() if apt.start_time else None,
+            "physio_name": apt.physio.full_name if apt.physio else "",
+            "observations": apt.notes,
+            "duration_minutes": apt.duration_minutes,
+            "status": apt.status.value if apt.status else "PENDING",
+            "payment_method": None,
+            "paid_with_pack": False,
+            "is_paid": False,
+            "invoice_id": None,
+            "is_manual": False,
+            "is_future": True,
         })
 
     return {"sessions": result}

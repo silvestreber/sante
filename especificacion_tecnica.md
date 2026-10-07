@@ -452,6 +452,12 @@ sante/
 - El listado (`GET /api/patients?q=...`) hace búsqueda flexible: divide el término en palabras y exige que todas aparezcan (en cualquier orden) en el nombre completo (nombre + apellidos) o el teléfono.
 - Insensible a mayúsculas/minúsculas (`ilike`) y a tildes (comparación sobre `unaccent(...)`).
 
+### Historial clínico (citas futuras y paginación)
+- `GET /api/clinical/patient/{id}` devuelve las sesiones del paciente y, además, sus **citas futuras** como filas con el flag `is_future=true` (fecha ≥ ahora, estado distinto de CANCELLED/FINALIZED y sin `ClinicalSession` asociada, para no duplicar).
+- Las filas `is_future` son informativas: el frontend no ofrece editar seguimiento, cobro ni justificante, y además hay guardas en las funciones JS para ignorarlas.
+- La tabla del historial se **pagina en el cliente** (15 filas/página) sobre la lista ya filtrada y ordenada; buscar u ordenar resetea a la primera página.
+- `appointment_to_dict` incluye `patient_provisional` para marcar en el calendario (borde discontinuo + etiqueta "sin ficha") las citas de pacientes provisionales.
+
 ### Rendimiento (Raspberry Pi)
 - Caché en memoria para endpoints frecuentes (TTL 3-5 segundos).
 - Arrancar con 3 workers: `uvicorn ... --workers 3`.

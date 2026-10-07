@@ -197,7 +197,10 @@
                 <input type="hidden" id="apt-id">
                 <div>
                     <div class="flex items-center justify-between">
-                        <label class="text-sm text-gray-600">Paciente</label>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-600">Paciente</label>
+                            <a id="patient-file-link" href="#" class="hidden text-xs text-sante-primary hover:underline inline-flex items-center gap-1" title="Ver ficha del paciente"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>Ver ficha</a>
+                        </div>
                         <button type="button" id="toggle-new-patient" onclick="toggleNewPatient()" class="text-xs text-sante-primary hover:underline">+ Paciente nuevo (sin ficha)</button>
                     </div>
                     <div class="relative">
@@ -768,6 +771,20 @@
                     info.el.style.borderTop = '2px solid #f97316';
                     info.el.title = '⚠️ Esta cita está fuera del horario actual de la clínica';
                 }
+                // Paciente sin ficha (provisional): marca visual sin emoji —
+                // borde discontinuo claro + etiqueta "sin ficha" y tooltip.
+                if (info.event.extendedProps.provisional) {
+                    info.el.style.border = '1.5px dashed rgba(255,255,255,0.9)';
+                    const prevTitle = info.el.title ? info.el.title + ' · ' : '';
+                    info.el.title = prevTitle + 'Paciente sin ficha completa';
+                    const titleEl = info.el.querySelector('.fc-event-title');
+                    if (titleEl) {
+                        const tag = document.createElement('span');
+                        tag.textContent = 'sin ficha';
+                        tag.style.cssText = 'display:inline-block;margin-left:4px;padding:0 4px;border-radius:4px;background:rgba(255,255,255,0.85);color:#92400e;font-size:0.6rem;font-weight:600;vertical-align:middle;';
+                        titleEl.appendChild(tag);
+                    }
+                }
                 // Cita finalizada: patrón de rayas diagonales sobre el color del fisio
                 // para diferenciarla claramente del resto, manteniendo su color.
                 if (info.event.extendedProps.isFinalized) {
@@ -864,17 +881,20 @@
                 const color = physioColors[apt.physio_id] || '#6b7280';
                 const isFinalized = apt.status === 'FINALIZED';
                 const opacity = apt.status === 'PENDING' ? 0.6 : 1;
+                // Prefijos del título (iconos existentes):
+                //   ✓  finalizada | ⚠️ fuera de horario
+                // El paciente sin ficha (provisional) se marca con un estilo visual
+                // (borde punteado + etiqueta "sin ficha") en eventDidMount, no con emoji.
+                const prefix = isFinalized ? '✓ ' : apt.out_of_hours ? '⚠️ ' : '';
                 return {
                     id: apt.id,
-                    // Marca visual de finalizada: ✓ delante del nombre.
-                    // Marca visual de fuera de horario: ⚠️ delante del nombre.
-                    title: isFinalized ? `✓ ${apt.patient_name}` : apt.out_of_hours ? `⚠️ ${apt.patient_name}` : apt.patient_name,
+                    title: `${prefix}${apt.patient_name}`,
                     start: apt.start_time,
                     end: new Date(new Date(apt.start_time).getTime() + apt.duration_minutes * 60000).toISOString(),
                     backgroundColor: color,
                     borderColor: apt.out_of_hours ? '#f97316' : apt.status === 'CANCELLED' ? '#ef4444' : color,
                     textColor: '#fff',
-                    extendedProps: { appointmentData: apt, opacity, isFinalized, outOfHours: apt.out_of_hours },
+                    extendedProps: { appointmentData: apt, opacity, isFinalized, outOfHours: apt.out_of_hours, provisional: apt.patient_provisional },
                 };
             });
         successCallback(events);
@@ -927,6 +947,9 @@
         // Ocultar aviso de paciente provisional.
         const apnote = document.getElementById('apt-provisional-note');
         if (apnote) apnote.classList.add('hidden');
+        // Ocultar enlace "Ver ficha" (no hay paciente seleccionado al resetear).
+        const pfLink = document.getElementById('patient-file-link');
+        if (pfLink) { pfLink.href = '#'; pfLink.classList.add('hidden'); }
         resetPatientNameLink();
         document.getElementById('patient-results').classList.add('hidden');
         document.getElementById('pack-section').classList.add('hidden');
@@ -996,6 +1019,7 @@
         document.getElementById('patient-search').value = apt.patient_name;
         document.getElementById('patient-search').readOnly = true;
         document.getElementById('apt-patient').value = apt.patient_id;
+        updatePatientFileLink();
         // Aviso de paciente sin ficha completa: enlace directo a completar su ficha.
         const apnote = document.getElementById('apt-provisional-note');
         if (apnote) {
@@ -1177,13 +1201,31 @@
         }, 300);
     });
 
+    // Muestra u oculta el enlace "Ver ficha" según haya un paciente seleccionado.
+    function updatePatientFileLink() {
+        const link = document.getElementById('patient-file-link');
+        if (!link) return;
+        const pid = aptPatient.value;
+        if (pid) {
+            link.href = `/patients/${pid}`;
+            link.classList.remove('hidden');
+        } else {
+            link.href = '#';
+            link.classList.add('hidden');
+        }
+    }
+
     patientResults.addEventListener('click', (e) => {
         const item = e.target.closest('[data-id]');
         if (!item) return;
         aptPatient.value = item.dataset.id;
         patientSearch.value = item.dataset.name;
         patientResults.classList.add('hidden');
+        updatePatientFileLink();
     });
+
+    // Si se escribe en el buscador (y se limpia la selección), ocultar el enlace.
+    patientSearch.addEventListener('input', updatePatientFileLink);
 
     document.addEventListener('click', (e) => {
         if (!patientSearch.contains(e.target) && !patientResults.contains(e.target)) {
@@ -1203,6 +1245,7 @@
             aptPatient.value = '';
             patientSearch.value = '';
             patientResults.classList.add('hidden');
+            updatePatientFileLink();
             toggle.textContent = 'Cancelar paciente nuevo';
         } else {
             toggle.textContent = '+ Paciente nuevo (sin ficha)';
@@ -1666,6 +1709,7 @@
             if (!newId) return;  // validación/creación fallida: el aviso ya se mostró
             patientId = String(newId);
             document.getElementById('apt-patient').value = patientId;
+            updatePatientFileLink();
         }
 
         // Comprobar fecha pasada solo en creación

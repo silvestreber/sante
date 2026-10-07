@@ -82,6 +82,9 @@
             </thead>
             <tbody id="sessions-body"></tbody>
         </table>
+        <div class="flex justify-center p-3">
+            <div id="history-pagination" class="inline-flex gap-2 text-sm hidden"></div>
+        </div>
     </div>
 
     </div>
@@ -440,6 +443,9 @@
         filterAndRenderSessions();
     }
 
+    const HISTORY_PAGE_SIZE = 15;
+    let historyPage = 1;
+
     function filterAndRenderSessions() {
         const query = document.getElementById('history-search').value.trim().toLowerCase();
         const order = document.getElementById('history-order').value;
@@ -458,11 +464,36 @@
             const diff = new Date(a.date) - new Date(b.date);
             return order === 'asc' ? diff : -diff;
         });
-        renderSessions(list);
+
+        // Paginación en cliente sobre la lista ya filtrada/ordenada.
+        const totalPages = Math.max(1, Math.ceil(list.length / HISTORY_PAGE_SIZE));
+        if (historyPage > totalPages) historyPage = totalPages;
+        const start = (historyPage - 1) * HISTORY_PAGE_SIZE;
+        const pageItems = list.slice(start, start + HISTORY_PAGE_SIZE);
+
+        renderSessions(pageItems);
+        renderHistoryPagination(historyPage, totalPages, list.length);
     }
 
-    document.getElementById('history-search').addEventListener('input', filterAndRenderSessions);
-    document.getElementById('history-order').addEventListener('change', filterAndRenderSessions);
+    function renderHistoryPagination(page, pages, total) {
+        const container = document.getElementById('history-pagination');
+        if (pages <= 1) { container.innerHTML = ''; container.classList.add('hidden'); return; }
+        container.classList.remove('hidden');
+        let html = '';
+        if (page > 1) html += `<button onclick="goHistoryPage(${page - 1})" class="px-3 py-1 border rounded hover:bg-gray-100 inline-flex items-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>`;
+        html += `<span class="px-3 py-1">${page} / ${pages}</span>`;
+        if (page < pages) html += `<button onclick="goHistoryPage(${page + 1})" class="px-3 py-1 border rounded hover:bg-gray-100 inline-flex items-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>`;
+        container.innerHTML = html;
+    }
+
+    function goHistoryPage(p) {
+        historyPage = p;
+        filterAndRenderSessions();
+    }
+
+    // Buscar u ordenar vuelve a la primera página.
+    document.getElementById('history-search').addEventListener('input', () => { historyPage = 1; filterAndRenderSessions(); });
+    document.getElementById('history-order').addEventListener('change', () => { historyPage = 1; filterAndRenderSessions(); });
 
     function renderSessions(sessions) {
         const tbody = document.getElementById('sessions-body');
@@ -470,8 +501,26 @@
             tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-400">No hay sesiones registradas</td></tr>';
             return;
         }
+        const statusLabels = { PENDING: 'Pendiente', CONFIRMED: 'Confirmada' };
         tbody.innerHTML = sessions.map(s => {
             const idx = sessionsData.indexOf(s);
+
+            // --- Cita futura (programada, aún no realizada): fila informativa ---
+            // No es una sesión: no permite editar seguimiento, justificante ni cobro.
+            if (s.is_future) {
+                const futureObs = s.observations ? (s.observations.length > 60 ? s.observations.substring(0, 60) + '...' : s.observations) : '<span class="text-gray-400">Sin notas</span>';
+                const statusTag = `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-sky-100 text-sky-700 align-middle">Próxima cita</span>`;
+                const statusCell = `<span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">${statusLabels[s.status] || s.status || ''}</span>`;
+                return `
+                    <tr class="border-t bg-sky-50/40">
+                        <td class="px-4 py-3">${formatDateTime(s.date)}${statusTag}</td>
+                        <td class="px-4 py-3 text-gray-600">${futureObs}</td>
+                        <td class="px-4 py-3 text-center">${statusCell}</td>
+                        <td class="px-4 py-3 text-center text-gray-300 text-xs">—</td>
+                    </tr>
+                `;
+            }
+
             const obs = s.observations ? (s.observations.length > 60 ? s.observations.substring(0, 60) + '...' : s.observations) : '<span class="text-gray-400">Sin seguimiento</span>';
             let payBadge = '';
             if (s.is_manual) {
@@ -502,6 +551,7 @@
 
     function viewSession(idx) {
         const s = sessionsData[idx];
+        if (!s || s.is_future) return;  // las citas futuras no abren detalle de sesión
         document.getElementById('vs-date').textContent = formatDateTime(s.date);
         document.getElementById('vs-physio').textContent = s.physio_name;
         let pay = 'Pendiente';
@@ -514,6 +564,7 @@
 
     function editSession(idx) {
         const s = sessionsData[idx];
+        if (!s || s.is_future) return;  // las citas futuras no tienen sesión que editar
         document.getElementById('es-id').value = s.id;
         document.getElementById('es-observations').value = s.observations || '';
         document.getElementById('edit-session-modal').classList.remove('hidden');
@@ -536,6 +587,7 @@
 
     function openSessionPayModal(idx) {
         const s = sessionsData[idx];
+        if (!s || s.is_future) return;  // una cita futura no se cobra desde el historial
         document.getElementById('sp-invoice-id').value = s.invoice_id || '';
         document.getElementById('session-pay-modal').classList.remove('hidden');
     }
@@ -578,6 +630,7 @@
 
     function viewAttendance(idx) {
         const s = sessionsData[idx];
+        if (!s || s.is_future) return;  // sin asistencia aún: no hay justificante
         const params = getAttendanceParams(s);
         const token = getToken();
         window.open(`/api/documents/attendance/${patientId}/pdf?${params}&token=${token}`, '_blank');
@@ -585,6 +638,7 @@
 
     async function emailAttendance(idx) {
         const s = sessionsData[idx];
+        if (!s || s.is_future) return;  // sin asistencia aún: no hay justificante
         const params = getAttendanceParams(s);
         const res = await authFetch(`/api/documents/attendance/${patientId}/email?${params}`, {
             method: 'POST',

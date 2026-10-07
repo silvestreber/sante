@@ -36,7 +36,8 @@ Documento de referencia de todo lo que hace la aplicación. Actualizado al estad
 - Vistas de mes, semana y día. En pantallas pequeñas (móvil) la cabecera del calendario se adapta automáticamente.
 - Los días de la semana siempre cerrados y las horas fuera del horario de apertura no se muestran. La pausa de mediodía (jornada partida) aparece como un bloque compacto en gris y no se puede seleccionar. Los días festivos aparecen en **naranja/ámbar** en las vistas semana y día, y con el nombre del festivo en rojo en la vista mes; no permiten citas.
 - Cada fisioterapeuta tiene un color asignado; sus citas se muestran en ese color. Las citas simultáneas de distintos fisios se muestran lado a lado, sin superposición.
-- Las citas **pendientes** se muestran con opacidad reducida. Las citas **finalizadas** se distinguen con un patrón de rayas diagonales y un "✓" delante del nombre del paciente. Las citas **fuera del horario actual** de la clínica muestran un aviso ⚠️ en el título y borde naranja.
+- Las citas **pendientes** se muestran con opacidad reducida. Las citas **finalizadas** se distinguen con un patrón de rayas diagonales y un "✓" delante del nombre del paciente.
+- Las citas de un **paciente sin ficha** (provisional) se marcan en el calendario con un borde discontinuo y una etiqueta "sin ficha" junto al nombre (con aviso al pasar el ratón), para identificarlas de un vistazo sin abrir la cita. Las citas **fuera del horario actual** de la clínica muestran un aviso ⚠️ en el título y borde naranja.
 - Botón "Nueva cita" junto al título, y también se puede crear haciendo clic en el calendario:
   - En vista de semana o día, el clic en una franja horaria abre el modal en esa hora.
   - En vista de mes, el clic en un día abre el modal con la hora de apertura de ese día.
@@ -48,6 +49,7 @@ Documento de referencia de todo lo que hace la aplicación. Actualizado al estad
 El modal de cita funciona así:
 
 - **Paciente:** buscador con autocompletado (búsqueda flexible por nombre/apellidos/teléfono, sin distinguir mayúsculas ni tildes; muestra todos los resultados con scroll si hay muchos).
+  - Cuando hay un paciente seleccionado, aparece un enlace **"Ver ficha"** junto a la etiqueta "Paciente" para abrir su ficha directamente.
   - **Paciente nuevo (sin ficha):** junto al buscador hay un botón que despliega un mini-formulario (nombre, apellidos, teléfono y email opcional). Al guardar la cita, el paciente provisional se crea automáticamente y queda asignado a la cita, sin pasos adicionales.
 - **Fisioterapeuta:** si el usuario es fisio, se preselecciona a sí mismo.
 - **Día:** selector de fecha.
@@ -193,6 +195,8 @@ Cualquier usuario con el atributo `is_physio` activado puede acceder a estas fun
 
 - Ver el historial de sesiones del paciente en tabla (fecha, seguimiento, estado de pago), dentro de la pestaña "Historial" de la ficha.
 - Ordenar por fecha ascendente o descendente (por defecto, las más recientes primero) y buscar por fecha u observaciones.
+- El historial está **paginado** (15 filas por página) con un control de páginas bajo la tabla. Al buscar u ordenar se vuelve a la primera página.
+- **Citas futuras:** el historial muestra también las próximas citas del paciente (programadas, aún no realizadas), marcadas con la etiqueta "Próxima cita" y su estado (pendiente/confirmada). Son **solo informativas**: no permiten editar seguimiento, registrar pago ni emitir justificante de asistencia (el paciente aún no ha asistido). Se excluyen las citas canceladas y las que ya tienen sesión registrada.
 - Cada fila abre el detalle de la sesión. Las sesiones con pago pendiente muestran un enlace "Pendiente" para registrar el cobro. El pago con bono se muestra como tal.
 - Las sesiones se registran normalmente al finalizar una cita desde el calendario. La fecha de la sesión es la de la cita. Cualquier rol puede finalizar citas.
 - **Añadir sesión manualmente:** en la cabecera del historial hay un botón "Añadir sesión" para registrar sesiones anteriores o realizadas fuera de la clínica (sin cita asociada). Se indica fecha, hora, fisioterapeuta (opcional) y seguimiento. Estas sesiones se marcan con una etiqueta "Manual", no tienen estado de pago ni generan cobro.
